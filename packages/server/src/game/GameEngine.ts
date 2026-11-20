@@ -21,11 +21,13 @@ export class GameEngine {
       return;
     }
 
-    // Rotate drawer
-    const players = this.room.players;
-    this.drawerIndex = (this.drawerIndex) % players.length;
-    players.forEach(p => { p.isDrawing = false; });
-    const drawer = players[this.drawerIndex];
+    // Only non-host players draw (TV/host is excluded from drawing rotation)
+    const drawablePlayers = this.room.players.filter(p => !p.isHost);
+    if (drawablePlayers.length === 0) { this.endGame(); return; }
+
+    this.drawerIndex = this.drawerIndex % drawablePlayers.length;
+    this.room.players.forEach(p => { p.isDrawing = false; });
+    const drawer = drawablePlayers[this.drawerIndex];
     drawer.isDrawing = true;
     this.drawerIndex++;
     this.room.currentDrawerId = drawer.id;

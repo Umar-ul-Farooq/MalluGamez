@@ -51,6 +51,12 @@ export function useGameEvents() {
       }
     });
 
+    // ── Charades Events ──
+    socket.on('charades:state', store.setCharadesState);
+    socket.on('charades:secret-movie', store.setSecretMovie);
+    socket.on('charades:incorrect-feedback', store.handleCharadesIncorrect);
+    socket.on('charades:round-ended', store.handleCharadesRoundEnd);
+
     // If already connected when this effect runs
     if (socket.connected) onConnect();
 
@@ -66,6 +72,10 @@ export function useGameEvents() {
       socket.off('guess:awarded', store.handleAward);
       socket.off('round:end',     store.handleRoundEnd);
       socket.off('game:end');
+      socket.off('charades:state');
+      socket.off('charades:secret-movie');
+      socket.off('charades:incorrect-feedback');
+      socket.off('charades:round-ended');
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

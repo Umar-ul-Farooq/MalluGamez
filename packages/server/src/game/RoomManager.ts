@@ -1,7 +1,8 @@
-import type { Room, Player, RoomSettings, RoomPublicState } from '@chitram/shared';
+import type { Room, Player, RoomSettings, RoomPublicState, GameType, CharadesSettings } from '@chitram/shared';
 import type { GameServer } from '../socket/index';
 import { GameEngine } from './GameEngine';
 import { WordBank } from './WordBank';
+import { CharadesEngine } from './CharadesEngine';
 
 function generateRoomCode(): string {
   return Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -11,10 +12,11 @@ export class RoomManager {
   private rooms = new Map<string, Room>();
   private playerToRoom = new Map<string, string>(); // socketId → roomCode
   private engines = new Map<string, GameEngine>();
+  private charadesEngines = new Map<string, CharadesEngine>();
 
   // ─── Create / Join ──────────────────────────────────────────────────────
 
-  createRoom(socketId: string, playerName: string): { room: Room; player: Player } {
+  createRoom(socketId: string, playerName: string, gameType: GameType = 'pictionary'): { room: Room; player: Player } {
     let code = generateRoomCode();
     while (this.rooms.has(code)) code = generateRoomCode();
 
@@ -24,13 +26,23 @@ export class RoomManager {
       score: 0,
       isHost: true,
       isDrawing: false,
+      team: null,
     };
 
     const room: Room = {
       code,
+      gameType,
       phase: 'lobby',
       players: [player],
       settings: { roundDurationSeconds: 60, totalRounds: 3 },
+      charadesSettings: gameType === 'charades' ? {
+        roundDurationSeconds: 90,
+        totalRoundsPerTeam: 5,
+        difficulty: 'mixed',
+        actorSelection: 'random',
+        teamAName: 'മിന്നൽ മുരളി',
+        teamBName: 'പ്രേമം ഗ്യാങ്',
+      } : undefined,
       currentRound: 0,
       currentDrawerId: null,
       currentWord: null,
@@ -45,7 +57,9 @@ export class RoomManager {
     const room = this.rooms.get(code);
     if (!room) throw new Error('Room not found');
     if (room.phase !== 'lobby') throw new Error('Game already in progress');
-    if (room.players.length >= 8) throw new Error('Room is full');
+
+    const maxPlayers = room.gameType === 'charades' ? 24 : 8;
+    if (room.players.length >= maxPlayers) throw new Error('Room is full');
 
     const player: Player = {
       id: socketId,
@@ -53,11 +67,37 @@ export class RoomManager {
       score: 0,
       isHost: false,
       isDrawing: false,
+      team: null,
     };
 
     room.players.push(player);
     this.playerToRoom.set(socketId, code);
     return { room, player };
+  }
+
+  // ─── Charades Engine Integration ─────────────────────────────────────────
+
+  getCharadesEngine(code: string): CharadesEngine | undefined {
+    return this.charadesEngines.get(code);
+  }
+
+  ensureCharadesEngine(code: string, io: GameServer): CharadesEngine {
+    let engine = this.charadesEngines.get(code);
+    if (!engine) {
+      const room = this.rooms.get(code);
+      if (!room) throw new Error('Room not found');
+      const settings = room.charadesSettings ?? {
+        roundDurationSeconds: 90,
+        totalRoundsPerTeam: 5,
+        difficulty: 'mixed',
+        actorSelection: 'random',
+        teamAName: 'മിന്നൽ മുരളി',
+        teamBName: 'പ്രേമം ഗ്യാങ്',
+      };
+      engine = new CharadesEngine(room, io, settings);
+      this.charadesEngines.set(code, engine);
+    }
+    return engine;
   }
 
   // ─── Settings ───────────────────────────────────────────────────────────
@@ -119,6 +159,8 @@ export class RoomManager {
       this.rooms.delete(code);
       this.engines.get(code)?.stop();
       this.engines.delete(code);
+      this.charadesEngines.get(code)?.stop();
+      this.charadesEngines.delete(code);
       return;
     }
 

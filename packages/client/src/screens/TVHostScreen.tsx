@@ -1,18 +1,22 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { getSocket } from '../lib/socket';
 import { useGameStore } from '../store/gameStore';
 import Canvas from '../components/Canvas';
 import Timer from '../components/Timer';
 import RoundEndOverlay from '../components/RoundEndOverlay';
-import type { RoomSettings } from '@chitram/shared';
+import CharadesTVScreen from './CharadesTVScreen';
+import type { RoomSettings, GameType } from '@chitram/shared';
 
 const TIMER_OPTIONS = [30, 60, 90, 120];
 const ROUND_OPTIONS = [2, 3, 5];
 
 export default function TVHostScreen() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const gameTypeParam = (searchParams.get('game') as GameType) || 'pictionary';
+
   const { room, connected, timerRemaining } = useGameStore();
   const [creating, setCreating] = useState(false);
   const [hostIP, setHostIP] = useState<string>('');
@@ -37,12 +41,11 @@ export default function TVHostScreen() {
     const tryCreate = () => {
       if (creating) return;
       setCreating(true);
-      socket.emit('room:create', { playerName: 'Host' });
+      socket.emit('room:create', { playerName: 'Host', gameType: gameTypeParam });
     };
     if (socket.connected) tryCreate();
     else socket.once('connect', tryCreate);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [creating, gameTypeParam]);
 
   if (!room) {
     return (
@@ -53,6 +56,11 @@ export default function TVHostScreen() {
         </div>
       </div>
     );
+  }
+
+  // If this room is for Dumb Charades, render Charades TV Screen
+  if (room.gameType === 'charades') {
+    return <CharadesTVScreen hostIP={hostIP} />;
   }
 
   const players = room.players.filter(p => !p.isHost);

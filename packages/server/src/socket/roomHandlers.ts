@@ -7,12 +7,15 @@ type GameSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
 
 export function registerRoomHandlers(io: GameServer, socket: GameSocket, rm: RoomManager) {
 
-  socket.on('room:create', ({ playerName }) => {
+  socket.on('room:create', ({ playerName, gameType = 'pictionary' }) => {
     try {
-      const { room, player } = rm.createRoom(socket.id, playerName);
+      const { room, player } = rm.createRoom(socket.id, playerName, gameType);
       socket.join(room.code);
+      if (gameType === 'charades') {
+        rm.ensureCharadesEngine(room.code, io);
+      }
       socket.emit('room:joined', rm.publicState(room.code));
-      console.log(`[room] ${playerName} created room ${room.code}`);
+      console.log(`[room] ${playerName} created ${gameType} room ${room.code}`);
     } catch (err: any) {
       socket.emit('room:error', err.message);
     }
@@ -24,6 +27,10 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rm: Roo
       socket.join(room.code);
       socket.emit('room:joined', rm.publicState(room.code));
       io.to(room.code).emit('room:updated', rm.publicState(room.code));
+      if (room.gameType === 'charades') {
+        const engine = rm.ensureCharadesEngine(room.code, io);
+        socket.emit('charades:state', engine.getPublicState());
+      }
       console.log(`[room] ${playerName} joined room ${room.code}`);
     } catch (err: any) {
       socket.emit('room:error', err.message);

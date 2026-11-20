@@ -190,7 +190,14 @@ export default function CharadesTVScreen({ hostIP }: Props) {
                   ) : (
                     teamAPlayers.map(p => (
                       <div key={p.id} className="bg-blue-900/30 border border-blue-400/30 px-3 py-2 rounded-xl flex items-center justify-between">
-                        <span className="text-white font-bold text-sm">👤 {p.name}</span>
+                        <span className="text-white font-bold text-sm flex items-center gap-1.5">
+                          👤 {p.name}
+                          {p.isOnline === false && (
+                            <span className="text-[10px] text-amber-400 bg-amber-500/20 px-1.5 py-0.5 rounded font-normal">
+                              screen locked
+                            </span>
+                          )}
+                        </span>
                         <button
                           onClick={() => getSocket().emit('charades:move-player', { playerId: p.id, team: 'B' })}
                           className="text-[11px] text-blue-300 hover:text-white bg-blue-800/50 px-2 py-0.5 rounded"
@@ -243,7 +250,14 @@ export default function CharadesTVScreen({ hostIP }: Props) {
                   ) : (
                     teamBPlayers.map(p => (
                       <div key={p.id} className="bg-amber-900/30 border border-amber-400/30 px-3 py-2 rounded-xl flex items-center justify-between">
-                        <span className="text-white font-bold text-sm">👤 {p.name}</span>
+                        <span className="text-white font-bold text-sm flex items-center gap-1.5">
+                          👤 {p.name}
+                          {p.isOnline === false && (
+                            <span className="text-[10px] text-amber-400 bg-amber-500/20 px-1.5 py-0.5 rounded font-normal">
+                              screen locked
+                            </span>
+                          )}
+                        </span>
                         <button
                           onClick={() => getSocket().emit('charades:move-player', { playerId: p.id, team: 'A' })}
                           className="text-[11px] text-amber-300 hover:text-white bg-amber-800/50 px-2 py-0.5 rounded"
@@ -420,6 +434,8 @@ export default function CharadesTVScreen({ hostIP }: Props) {
   const isActingTeamA = charadesState.actingTeam === 'A';
   const actingTeamName = isActingTeamA ? charadesState.teamAName : charadesState.teamBName;
   const judgingTeamName = isActingTeamA ? charadesState.teamBName : charadesState.teamAName;
+  const currentActor = room.players.find(p => p.id === charadesState.currentActorId);
+  const isActorOffline = currentActor?.isOnline === false;
 
   return (
     <div className="h-full flex flex-col bg-gray-950 select-none overflow-hidden">
@@ -529,12 +545,33 @@ export default function CharadesTVScreen({ hostIP }: Props) {
                 Waiting for {charadesState.currentActorName} to click Ready…
               </p>
             </div>
-            <button
-              onClick={handleStartActing}
-              className="btn-primary bg-amber-500 hover:bg-amber-600 text-gray-950 font-black text-lg py-3 px-8"
-            >
-              ▶️ Force Start Acting (Host)
-            </button>
+            {isActorOffline && (
+              <div className="bg-red-500/20 border border-red-500/40 text-red-200 px-4 py-2.5 rounded-2xl text-sm flex items-center justify-center gap-3 animate-pulse">
+                <span>⚠️ {charadesState.currentActorName}&apos;s phone is disconnected or screen locked!</span>
+                <button
+                  onClick={() => getSocket().emit('charades:change-actor')}
+                  className="bg-red-500 hover:bg-red-600 text-white font-bold text-xs px-3 py-1 rounded-lg"
+                >
+                  Pick Replacement Now
+                </button>
+              </div>
+            )}
+
+            <div className="flex items-center justify-center gap-3">
+              <button
+                onClick={handleStartActing}
+                className="btn-primary bg-amber-500 hover:bg-amber-600 text-gray-950 font-black text-lg py-3 px-8"
+              >
+                ▶️ Force Start Acting (Host)
+              </button>
+              <button
+                onClick={() => getSocket().emit('charades:change-actor')}
+                className="btn-secondary text-sm py-3 px-5 text-white/80 hover:text-white"
+                title="Pick another player from the acting team"
+              >
+                🔄 Change Actor / നടനെ മാറ്റുക
+              </button>
+            </div>
           </div>
         )}
 
@@ -570,6 +607,21 @@ export default function CharadesTVScreen({ hostIP }: Props) {
               <span className="flex items-center gap-2">🚫 ശബ്ദം ഉണ്ടാക്കരുത്</span>
               <span className="flex items-center gap-2">✋ ആംഗ്യങ്ങൾ മാത്രം</span>
               <span className="flex items-center gap-2">🗣️ ഉറക്കെ വിളിച്ചു പറയുക</span>
+            </div>
+
+            {/* Change Actor button / connection warning */}
+            <div className="flex items-center justify-center gap-4 pt-1">
+              {isActorOffline && (
+                <span className="text-red-400 text-xs font-bold animate-pulse">
+                  ⚠️ Actor is disconnected / locked
+                </span>
+              )}
+              <button
+                onClick={() => getSocket().emit('charades:change-actor')}
+                className="text-xs text-white/50 hover:text-white underline"
+              >
+                🔄 Actor disconnected? Change Actor (നടനെ മാറ്റുക)
+              </button>
             </div>
           </div>
         )}

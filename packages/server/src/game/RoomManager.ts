@@ -13,6 +13,7 @@ export class RoomManager {
   private playerToRoom = new Map<string, string>(); // socketId → roomCode
   private engines = new Map<string, GameEngine>();
   private charadesEngines = new Map<string, CharadesEngine>();
+  private disconnectTimeouts = new Map<string, NodeJS.Timeout>();
 
   // ─── Create / Join ──────────────────────────────────────────────────────
 
@@ -27,6 +28,7 @@ export class RoomManager {
       isHost: true,
       isDrawing: false,
       team: null,
+      isOnline: true,
     };
 
     const room: Room = {
@@ -56,22 +58,59 @@ export class RoomManager {
   joinRoom(socketId: string, code: string, playerName: string): { room: Room; player: Player } {
     const room = this.rooms.get(code);
     if (!room) throw new Error('Room not found');
-    if (room.phase !== 'lobby') throw new Error('Game already in progress');
 
+    const cleanName = playerName.trim();
+
+    // Check if player with this name was already in the room (reconnecting after screen lock / sleep)
+    const existingPlayer = room.players.find(
+      p => p.name.toLowerCase() === cleanName.toLowerCase()
+    );
+
+    if (existingPlayer) {
+      const oldSocketId = existingPlayer.id;
+      this.playerToRoom.delete(oldSocketId);
+      existingPlayer.id = socketId;
+      existingPlayer.isOnline = true;
+      this.playerToRoom.set(socketId, code);
+
+      // Cancel disconnect timer for this player
+      const timeoutKey = `${code}:${existingPlayer.name.toLowerCase()}`;
+      if (this.disconnectTimeouts.has(timeoutKey)) {
+        clearTimeout(this.disconnectTimeouts.get(timeoutKey));
+        this.disconnectTimeouts.delete(timeoutKey);
+      }
+
+      // Notify Charades engine of reconnection
+      const charadesEngine = this.charadesEngines.get(code);
+      if (charadesEngine) {
+        charadesEngine.handlePlayerReconnect(oldSocketId, socketId, existingPlayer);
+      }
+
+      return { room, player: existingPlayer };
+    }
+
+    // New player joining (even mid-game)
     const maxPlayers = room.gameType === 'charades' ? 24 : 8;
     if (room.players.length >= maxPlayers) throw new Error('Room is full');
 
     const player: Player = {
       id: socketId,
-      name: playerName.trim(),
+      name: cleanName,
       score: 0,
       isHost: false,
       isDrawing: false,
       team: null,
+      isOnline: true,
     };
 
     room.players.push(player);
     this.playerToRoom.set(socketId, code);
+
+    const charadesEngine = this.charadesEngines.get(code);
+    if (charadesEngine) {
+      charadesEngine.handlePlayerJoined(player);
+    }
+
     return { room, player };
   }
 
@@ -143,33 +182,79 @@ export class RoomManager {
     this.engines.get(code)?.endRound();
   }
 
-  // ─── Disconnect ─────────────────────────────────────────────────────────
+  // ─── Disconnect & Reconnect ─────────────────────────────────────────────
 
-  handleDisconnect(socketId: string, io: GameServer) {
+  handleDisconnect(socketId: string, io: GameServer, explicitLeave = false) {
     const code = this.playerToRoom.get(socketId);
     if (!code) return;
 
     const room = this.rooms.get(code);
     if (!room) return;
 
-    room.players = room.players.filter(p => p.id !== socketId);
-    this.playerToRoom.delete(socketId);
+    const player = room.players.find(p => p.id === socketId);
+    if (!player) return;
 
-    if (room.players.length === 0) {
-      this.rooms.delete(code);
-      this.engines.get(code)?.stop();
-      this.engines.delete(code);
-      this.charadesEngines.get(code)?.stop();
-      this.charadesEngines.delete(code);
+    if (explicitLeave) {
+      // Deliberate exit: remove immediately
+      room.players = room.players.filter(p => p.id !== socketId);
+      this.playerToRoom.delete(socketId);
+
+      if (room.players.length === 0) {
+        this.destroyRoom(code);
+        return;
+      }
+
+      if (!room.players.some(p => p.isHost)) {
+        room.players[0].isHost = true;
+      }
+
+      io.to(code).emit('room:updated', this.publicState(code));
       return;
     }
 
-    // Transfer host if needed
-    if (!room.players.some(p => p.isHost)) {
-      room.players[0].isHost = true;
+    // Unintentional disconnect (e.g. mobile screen locked, sleeping, switching apps):
+    player.isOnline = false;
+    io.to(code).emit('room:updated', this.publicState(code));
+
+    // 2-minute grace period to unlock phone and re-attach
+    const timeoutKey = `${code}:${player.name.toLowerCase()}`;
+    if (this.disconnectTimeouts.has(timeoutKey)) {
+      clearTimeout(this.disconnectTimeouts.get(timeoutKey));
     }
 
-    io.to(code).emit('room:updated', this.publicState(code));
+    const timer = setTimeout(() => {
+      this.disconnectTimeouts.delete(timeoutKey);
+      const currentRoom = this.rooms.get(code);
+      if (!currentRoom) return;
+
+      const p = currentRoom.players.find(x => x.name.toLowerCase() === player.name.toLowerCase());
+      if (p && !p.isOnline) {
+        currentRoom.players = currentRoom.players.filter(x => x !== p);
+        this.playerToRoom.delete(p.id);
+
+        if (currentRoom.players.length === 0 || !currentRoom.players.some(x => x.isOnline)) {
+          this.destroyRoom(code);
+          return;
+        }
+
+        if (!currentRoom.players.some(x => x.isHost)) {
+          const firstOnline = currentRoom.players.find(x => x.isOnline);
+          if (firstOnline) firstOnline.isHost = true;
+        }
+
+        io.to(code).emit('room:updated', this.publicState(code));
+      }
+    }, 120000); // 2 minutes grace period
+
+    this.disconnectTimeouts.set(timeoutKey, timer);
+  }
+
+  destroyRoom(code: string) {
+    this.rooms.delete(code);
+    this.engines.get(code)?.stop();
+    this.engines.delete(code);
+    this.charadesEngines.get(code)?.stop();
+    this.charadesEngines.delete(code);
   }
 
   // ─── Helpers ────────────────────────────────────────────────────────────

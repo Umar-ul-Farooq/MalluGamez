@@ -147,6 +147,24 @@ export function registerCharadesHandlers(io: GameServer, socket: GameSocket, rm:
     }
   });
 
+  // Host picks a different actor (if current actor disconnected or needs replacement)
+  socket.on('charades:change-actor', () => {
+    try {
+      const room = rm.getRoomByPlayer(socket.id);
+      if (!room || room.gameType !== 'charades') return;
+
+      const host = room.players.find(p => p.id === socket.id);
+      if (!host?.isHost) return;
+
+      const engine = rm.getCharadesEngine(room.code);
+      if (!engine) return;
+
+      engine.changeActor();
+    } catch (err: any) {
+      socket.emit('room:error', err.message);
+    }
+  });
+
   // Host manual score adjustment (+/- 2 or +/- 1)
   socket.on('charades:adjust-score', ({ team, delta }) => {
     try {

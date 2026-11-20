@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { getSocket } from '../lib/socket';
 import { useGameStore, selectMyPlayer } from '../store/gameStore';
 import Timer from '../components/Timer';
@@ -16,6 +16,13 @@ export default function CharadesMobileScreen() {
   const myPlayer = useGameStore(selectMyPlayer);
   const [readyClicked, setReadyClicked] = useState(false);
   const [submittingJudge, setSubmittingJudge] = useState(false);
+  const [showTeamSelect, setShowTeamSelect] = useState(false);
+
+  useEffect(() => {
+    if (charadesState?.roundPhase !== 'actor-ready') {
+      setReadyClicked(false);
+    }
+  }, [charadesState?.roundPhase]);
 
   if (!room) return null;
 
@@ -26,6 +33,7 @@ export default function CharadesMobileScreen() {
 
   function handleSelectTeam(team: 'A' | 'B') {
     getSocket().emit('charades:select-team', { team });
+    setShowTeamSelect(false);
   }
 
   function handleActorReady() {
@@ -43,9 +51,9 @@ export default function CharadesMobileScreen() {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // VIEW 1: LOBBY & TEAM SELECTION
+  // VIEW 1: LOBBY & TEAM SELECTION (Or when player needs to pick/change team)
   // ──────────────────────────────────────────────────────────────────────────
-  if (room.phase === 'lobby' || !charadesState?.teamsLocked) {
+  if (room.phase === 'lobby' || !charadesState?.teamsLocked || !myTeam || showTeamSelect) {
     const teamMembers = room.players.filter(p => !p.isHost && p.team === myTeam);
 
     return (
@@ -54,7 +62,9 @@ export default function CharadesMobileScreen() {
         <div className="text-center shrink-0">
           <span className="text-4xl animate-bounce">🎭</span>
           <h1 className="text-2xl font-black text-white mt-1">Dumb Charades</h1>
-          <p className="ml-text text-amber-300 text-sm font-bold">ടീം തിരഞ്ഞെടുക്കുക</p>
+          <p className="ml-text text-amber-300 text-sm font-bold">
+            {myTeam ? 'ടീം മാറ്റുക / Switch Team' : 'ടീം തിരഞ്ഞെടുക്കുക / Select Team'}
+          </p>
         </div>
 
         {/* Team Selection Cards */}
@@ -110,6 +120,15 @@ export default function CharadesMobileScreen() {
               )}
             </div>
           </button>
+
+          {showTeamSelect && myTeam && (
+            <button
+              onClick={() => setShowTeamSelect(false)}
+              className="text-white/50 text-xs hover:text-white py-2 text-center"
+            >
+              ← Keep current team and return to game
+            </button>
+          )}
         </div>
 
         {/* Footer info */}
@@ -120,7 +139,7 @@ export default function CharadesMobileScreen() {
                 Joined {myTeam === 'A' ? teamAName : teamBName}
               </p>
               <p className="text-white/40 text-xs mt-1">
-                {teamMembers.length} teammates • Waiting for host to start…
+                {teamMembers.length} teammates • {charadesState?.teamsLocked ? 'Game in progress' : 'Waiting for host to start…'}
               </p>
             </div>
           ) : (
@@ -181,7 +200,16 @@ export default function CharadesMobileScreen() {
       {/* ── Top Bar ───────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between pb-3 border-b border-white/10 shrink-0">
         <div>
-          <span className="text-white/40 text-[10px] uppercase font-bold tracking-wider">Your Team</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-white/40 text-[10px] uppercase font-bold tracking-wider">Your Team</span>
+            <button
+              onClick={() => setShowTeamSelect(true)}
+              className="text-[10px] bg-white/10 hover:bg-white/20 text-amber-300 font-bold px-1.5 py-0.5 rounded transition"
+              title="Switch team / ടീം മാറ്റുക"
+            >
+              🔄 Switch
+            </button>
+          </div>
           <p className={`font-black text-sm ${myTeam === 'A' ? 'text-blue-300' : 'text-amber-300'}`}>
             {myTeam === 'A' ? teamAName : teamBName}
           </p>

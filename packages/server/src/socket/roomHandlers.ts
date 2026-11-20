@@ -52,7 +52,7 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rm: Roo
 
   socket.on('room:leave', () => {
     try {
-      rm.handleDisconnect(socket.id, io);
+      rm.handleDisconnect(socket.id, io, true);
     } catch (err: any) {
       console.error(err);
     }

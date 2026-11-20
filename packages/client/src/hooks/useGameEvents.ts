@@ -18,14 +18,38 @@ export function useGameEvents() {
     const onConnect = () => {
       store.setMyId(socket.id ?? '');
       store.setConnected(true);
+
+      // Auto-reconnect immediately when mobile phone unlocks screen or network reconnects!
+      const saved = localStorage.getItem('chitram_session');
+      if (saved) {
+        try {
+          const { roomCode, playerName } = JSON.parse(saved);
+          if (roomCode && playerName) {
+            socket.emit('room:join', { roomCode, playerName });
+          }
+        } catch (e) {}
+      }
     };
     const onDisconnect = () => store.setConnected(false);
 
+    const onRoomJoined = (room: any) => {
+      store.setRoom(room);
+      const me = room.players.find((p: any) => p.id === socket.id);
+      if (me && !me.isHost) {
+        localStorage.setItem('chitram_session', JSON.stringify({ roomCode: room.code, playerName: me.name }));
+      }
+    };
+
     socket.on('connect',       onConnect);
     socket.on('disconnect',    onDisconnect);
-    socket.on('room:joined',   store.setRoom);
+    socket.on('room:joined',   onRoomJoined);
     socket.on('room:updated',  store.setRoom);
-    socket.on('room:error',    (msg) => store.addToast(`⚠️ ${msg}`, 'error'));
+    socket.on('room:error',    (msg) => {
+      if (msg.includes('not found')) {
+        localStorage.removeItem('chitram_session');
+      }
+      store.addToast(`⚠️ ${msg}`, 'error');
+    });
 
     socket.on('game:started',  (room) => {
       store.handleGameStarted(room);

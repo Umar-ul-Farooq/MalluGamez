@@ -36,12 +36,128 @@ export class CharadesEngine {
   // ─── Team Management ──────────────────────────────────────────────────────
 
   setPlayerTeam(playerId: string, team: 'A' | 'B') {
-    if (this.room.charadesState?.teamsLocked) {
-      throw new Error('Teams are locked');
-    }
     const player = this.room.players.find(p => p.id === playerId);
     if (!player) return;
     player.team = team;
+
+    const state = this.room.charadesState;
+    if (!state) return;
+
+    // Recalculate turns whenever team membership updates
+    this.recalculateTurns();
+
+    // If game is already playing:
+    if (this.room.phase === 'playing') {
+      // 1. If player joined the judging team, deliver the secret movie so they can judge!
+      if (team === state.judgingTeam && this.currentMovie && (state.roundPhase === 'actor-ready' || state.roundPhase === 'acting')) {
+        const secretPayload: SecretMoviePayload = {
+          title: this.currentMovie.title,
+          manglish: this.currentMovie.manglish,
+          year: this.currentMovie.year,
+          difficulty: this.currentMovie.difficulty,
+        };
+        this.io.to(playerId).emit('charades:secret-movie', secretPayload);
+      }
+
+      // 2. If this player was the active actor and switched away, pick a replacement actor
+      if (state.currentActorId === playerId && team !== state.actingTeam) {
+        this.changeActor();
+      }
+    }
+
+    this.broadcastState();
+  }
+
+  recalculateTurns() {
+    const teamAMembers = this.room.players.filter(p => !p.isHost && p.team === 'A');
+    const teamBMembers = this.room.players.filter(p => !p.isHost && p.team === 'B');
+
+    const validA = new Set(teamAMembers.map(p => p.id));
+    const validB = new Set(teamBMembers.map(p => p.id));
+
+    this.actedPlayerIdsTeamA = new Set([...this.actedPlayerIdsTeamA].filter(id => validA.has(id)));
+    this.actedPlayerIdsTeamB = new Set([...this.actedPlayerIdsTeamB].filter(id => validB.has(id)));
+
+    // Reset rotation pool once all available members on a team have acted
+    if (this.actedPlayerIdsTeamA.size >= teamAMembers.length) {
+      this.actedPlayerIdsTeamA.clear();
+    }
+    if (this.actedPlayerIdsTeamB.size >= teamBMembers.length) {
+      this.actedPlayerIdsTeamB.clear();
+    }
+  }
+
+  handlePlayerReconnect(oldSocketId: string, newSocketId: string, player: Player) {
+    const state = this.room.charadesState;
+    if (!state) return;
+
+    // 1. If this player was the active actor, update ID and resend secret movie
+    if (state.currentActorId === oldSocketId) {
+      state.currentActorId = newSocketId;
+      state.currentActorName = player.name;
+
+      if (this.currentMovie) {
+        const secretPayload: SecretMoviePayload = {
+          title: this.currentMovie.title,
+          manglish: this.currentMovie.manglish,
+          year: this.currentMovie.year,
+          difficulty: this.currentMovie.difficulty,
+        };
+        this.io.to(newSocketId).emit('charades:secret-movie', secretPayload);
+      }
+    }
+
+    // 2. If this player is on the judging team, resend secret movie
+    if (player.team === state.judgingTeam && this.currentMovie && (state.roundPhase === 'actor-ready' || state.roundPhase === 'acting')) {
+      const secretPayload: SecretMoviePayload = {
+        title: this.currentMovie.title,
+        manglish: this.currentMovie.manglish,
+        year: this.currentMovie.year,
+        difficulty: this.currentMovie.difficulty,
+      };
+      this.io.to(newSocketId).emit('charades:secret-movie', secretPayload);
+    }
+
+    // 3. Update acted sets with new socket ID
+    if (this.actedPlayerIdsTeamA.has(oldSocketId)) {
+      this.actedPlayerIdsTeamA.delete(oldSocketId);
+      this.actedPlayerIdsTeamA.add(newSocketId);
+    }
+    if (this.actedPlayerIdsTeamB.has(oldSocketId)) {
+      this.actedPlayerIdsTeamB.delete(oldSocketId);
+      this.actedPlayerIdsTeamB.add(newSocketId);
+    }
+
+    this.recalculateTurns();
+    this.broadcastState();
+  }
+
+  handlePlayerJoined(_player: Player) {
+    this.recalculateTurns();
+    this.broadcastState();
+  }
+
+  changeActor() {
+    const state = this.room.charadesState;
+    if (!state || this.room.phase !== 'playing') return;
+    if (state.roundPhase !== 'actor-ready' && state.roundPhase !== 'acting') return;
+
+    const actor = this.pickActorForTeam(state.actingTeam);
+    state.currentActorId = actor.id;
+    state.currentActorName = actor.name;
+    state.roundPhase = 'actor-ready';
+
+    if (this.currentMovie) {
+      const secretPayload: SecretMoviePayload = {
+        title: this.currentMovie.title,
+        manglish: this.currentMovie.manglish,
+        year: this.currentMovie.year,
+        difficulty: this.currentMovie.difficulty,
+      };
+      this.io.to(actor.id).emit('charades:secret-movie', secretPayload);
+    }
+
+    this.broadcastState();
   }
 
   lockTeams() {

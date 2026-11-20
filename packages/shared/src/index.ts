@@ -11,6 +11,7 @@ export interface Player {
   isHost: boolean;
   isDrawing: boolean;
   team?: 'A' | 'B' | null; // used in team games like Charades
+  isOnline?: boolean;      // true if currently connected, false if screen locked
 }
 
 // ─── Room ───────────────────────────────────────────────────────────────────
@@ -122,6 +123,7 @@ export interface ClientToServerEvents {
   'charades:start-acting': () => void; // host begins round
   'charades:judge-action': (payload: { isCorrect: boolean }) => void; // opposing team judges
   'charades:next-round': () => void; // host advances round
+  'charades:change-actor': () => void; // host rerolls actor if current actor left/disconnected
   'charades:adjust-score': (payload: { team: 'A' | 'B'; delta: number }) => void; // host score correction
   'charades:restart-game': () => void; // host restarts with same teams
 }

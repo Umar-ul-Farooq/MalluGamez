@@ -12,28 +12,35 @@ interface StrokeRecord {
   points: DrawPoint[];
 }
 
-const CANVAS_BG = '#FAFAF8'; // warm white — like a whiteboard
+const CANVAS_BG = '#FAFAF8'; // warm whiteboard background
 
 const Canvas = forwardRef<CanvasHandle, {
   mode: 'draw' | 'view';
   color?: string;
   brushSize?: number;
 }>(function Canvas({ mode, color = '#1a1a1a', brushSize = 6 }, ref) {
-  const wrapRef    = useRef<HTMLDivElement>(null);
-  const canvasRef  = useRef<HTMLCanvasElement>(null);
-  const ctxRef     = useRef<CanvasRenderingContext2D | null>(null);
-  const historyRef = useRef<StrokeRecord[]>([]);   // all finished strokes → for resize redraw
-  const colorRef   = useRef(color);
-  const sizeRef    = useRef(brushSize);
-  const isDownRef  = useRef(false);
-  const lastPtRef  = useRef<DrawPoint | null>(null);
-  const lastEmitTs = useRef(0);
+  const wrapRef       = useRef<HTMLDivElement>(null);
+  const canvasRef     = useRef<HTMLCanvasElement>(null);
+  const ctxRef        = useRef<CanvasRenderingContext2D | null>(null);
+  const historyRef    = useRef<StrokeRecord[]>([]);   // all completed strokes for redraws
+  const colorRef      = useRef(color);
+  const sizeRef       = useRef(brushSize);
+  const isDownRef     = useRef(false);
+  const lastLocalPt   = useRef<DrawPoint | null>(null);
+  const strokeBuffer  = useRef<DrawPoint[]>([]);      // points buffered since last network emit
+  const lastEmitTs    = useRef(0);
 
-  // Keep refs in sync with props so event handlers always see current values
+  // Keep refs in sync with props
   useEffect(() => { colorRef.current = color; },     [color]);
   useEffect(() => { sizeRef.current  = brushSize; }, [brushSize]);
 
-  // ── Canvas sizing ──────────────────────────────────────────────────────────
+  // Proportional brush scaling: 6px on a 360px mobile canvas scales gracefully on a large TV
+  function getScaledLineWidth(baseSize: number, w: number): number {
+    const scale = Math.max(1, w / 450);
+    return Math.round(baseSize * scale);
+  }
+
+  // ── Canvas setup & resize ──────────────────────────────────────────────────
   function resize() {
     const wrap = wrapRef.current;
     const canvas = canvasRef.current;
@@ -43,8 +50,8 @@ const Canvas = forwardRef<CanvasHandle, {
     const w = wrap.offsetWidth;
     const h = wrap.offsetHeight;
 
-    canvas.width  = w * dpr;
-    canvas.height = h * dpr;
+    canvas.width  = Math.floor(w * dpr);
+    canvas.height = Math.floor(h * dpr);
     canvas.style.width  = `${w}px`;
     canvas.style.height = `${h}px`;
 
@@ -54,12 +61,13 @@ const Canvas = forwardRef<CanvasHandle, {
     ctx.lineCap  = 'round';
     ctxRef.current = ctx;
 
+    // Fill background
     ctx.fillStyle = CANVAS_BG;
     ctx.fillRect(0, 0, w, h);
 
-    // Redraw all stored strokes after resize
+    // Redraw all stored strokes with high fidelity
     for (const s of historyRef.current) {
-      drawFullStroke(ctx, s, w, h);
+      drawPolyline(ctx, s.points, s.color, s.size, w, h);
     }
   }
 
@@ -71,62 +79,57 @@ const Canvas = forwardRef<CanvasHandle, {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Drawing primitives ─────────────────────────────────────────────────────
   function dim() {
     const wrap = wrapRef.current!;
     return { w: wrap.offsetWidth, h: wrap.offsetHeight };
   }
 
-  /** Redraw a complete stored stroke with quadratic bezier smoothing */
-  function drawFullStroke(
+  /**
+   * Draws a continuous polyline or a dot with round ends.
+   */
+  function drawPolyline(
     ctx: CanvasRenderingContext2D,
-    s: StrokeRecord,
-    w: number, h: number,
+    points: DrawPoint[],
+    c: string,
+    sz: number,
+    w: number,
+    h: number
   ) {
-    if (s.points.length < 2) return;
-    ctx.save();
-    ctx.strokeStyle = s.color;
-    ctx.lineWidth   = s.size;
-    ctx.lineJoin    = 'round';
-    ctx.lineCap     = 'round';
-    ctx.beginPath();
-    ctx.moveTo(s.points[0].x * w, s.points[0].y * h);
-    for (let i = 1; i < s.points.length - 1; i++) {
-      const mx = ((s.points[i].x + s.points[i + 1].x) / 2) * w;
-      const my = ((s.points[i].y + s.points[i + 1].y) / 2) * h;
-      ctx.quadraticCurveTo(s.points[i].x * w, s.points[i].y * h, mx, my);
-    }
-    const last = s.points.at(-1)!;
-    ctx.lineTo(last.x * w, last.y * h);
-    ctx.stroke();
-    ctx.restore();
-  }
+    if (points.length === 0) return;
 
-  /** Draw a single line segment — fast, used for incremental updates */
-  function drawSegment(from: DrawPoint, to: DrawPoint, c: string, sz: number) {
-    const ctx = ctxRef.current;
-    if (!ctx) return;
-    const { w, h } = dim();
-    ctx.save();
+    const lineWidth = getScaledLineWidth(sz, w);
+
+    if (points.length === 1) {
+      // Single tap / dot
+      ctx.fillStyle = c;
+      ctx.beginPath();
+      ctx.arc(points[0].x * w, points[0].y * h, lineWidth / 2, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+
     ctx.strokeStyle = c;
-    ctx.lineWidth   = sz;
+    ctx.lineWidth   = lineWidth;
     ctx.lineJoin    = 'round';
     ctx.lineCap     = 'round';
     ctx.beginPath();
-    ctx.moveTo(from.x * w, from.y * h);
-    ctx.lineTo(to.x   * w, to.y   * h);
+    ctx.moveTo(points[0].x * w, points[0].y * h);
+
+    for (let i = 1; i < points.length; i++) {
+      ctx.lineTo(points[i].x * w, points[i].y * h);
+    }
     ctx.stroke();
-    ctx.restore();
   }
 
   function clearAll() {
     const ctx = ctxRef.current;
-    if (!ctx) return;
+    if (!ctx || !wrapRef.current) return;
     const { w, h } = dim();
     ctx.fillStyle = CANVAS_BG;
     ctx.fillRect(0, 0, w, h);
     historyRef.current = [];
-    lastPtRef.current  = null;
+    lastLocalPt.current = null;
+    strokeBuffer.current = [];
   }
 
   useImperativeHandle(ref, () => ({ clear: clearAll }));
@@ -137,24 +140,28 @@ const Canvas = forwardRef<CanvasHandle, {
     const socket = getSocket();
 
     function onStroke(stroke: DrawStroke) {
+      const ctx = ctxRef.current;
+      if (!ctx || !wrapRef.current) return;
+      const { w, h } = dim();
+
       if (stroke.type === 'start') {
         historyRef.current.push({
           color: stroke.color,
           size:  stroke.size,
           points: [...stroke.points],
         });
+        drawPolyline(ctx, stroke.points, stroke.color, stroke.size, w, h);
       } else {
-        // Append new point; points[0] = previous, points[1] = new
-        if (stroke.points.length < 2) return;
+        // Continuous polyline segment
+        if (stroke.points.length === 0) return;
         const current = historyRef.current.at(-1);
         if (current) {
-          current.points.push(stroke.points[1]);
-          drawSegment(stroke.points[0], stroke.points[1], stroke.color, stroke.size);
+          current.points.push(...stroke.points.slice(1));
         }
+        drawPolyline(ctx, stroke.points, stroke.color, stroke.size, w, h);
       }
     }
 
-    // Clear canvas between rounds (new round = new drawing)
     function onGameStarted() { clearAll(); }
     function onCleared()     { clearAll(); }
 
@@ -174,63 +181,115 @@ const Canvas = forwardRef<CanvasHandle, {
   function toPt(clientX: number, clientY: number): DrawPoint {
     const rect = canvasRef.current!.getBoundingClientRect();
     return {
-      x: (clientX - rect.left) / rect.width,
-      y: (clientY - rect.top)  / rect.height,
+      x: Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)),
+      y: Math.max(0, Math.min(1, (clientY - rect.top) / rect.height)),
     };
+  }
+
+  function emitBuffer(isEnd = false) {
+    if (strokeBuffer.current.length < 2) return;
+    getSocket().emit('draw:stroke', {
+      points: [...strokeBuffer.current],
+      color: colorRef.current,
+      size:  sizeRef.current,
+      type:  'stroke',
+    });
+    // Keep the very last point so the next emitted segment seamlessly attaches to it
+    const lastPoint = strokeBuffer.current[strokeBuffer.current.length - 1];
+    strokeBuffer.current = isEnd ? [] : [lastPoint];
   }
 
   function onDown(clientX: number, clientY: number) {
     if (mode !== 'draw') return;
     const p = toPt(clientX, clientY);
     isDownRef.current = true;
-    lastPtRef.current = p;
-    historyRef.current.push({ color: colorRef.current, size: sizeRef.current, points: [p] });
+    lastLocalPt.current = p;
+    strokeBuffer.current = [p];
+
+    // Local draw
+    const ctx = ctxRef.current;
+    if (ctx && wrapRef.current) {
+      const { w, h } = dim();
+      drawPolyline(ctx, [p], colorRef.current, sizeRef.current, w, h);
+    }
+
+    historyRef.current.push({
+      color: colorRef.current,
+      size:  sizeRef.current,
+      points: [p],
+    });
+
     getSocket().emit('draw:stroke', {
       points: [p],
       color: colorRef.current,
       size:  sizeRef.current,
       type:  'start',
     });
+
+    lastEmitTs.current = Date.now();
   }
 
   function onMove(clientX: number, clientY: number) {
     if (mode !== 'draw' || !isDownRef.current) return;
-    const p    = toPt(clientX, clientY);
-    const prev = lastPtRef.current!;
-    lastPtRef.current = p;
+    const p = toPt(clientX, clientY);
+    const prev = lastLocalPt.current;
+    if (!prev) return;
 
-    // Draw locally for immediate feedback
-    drawSegment(prev, p, colorRef.current, sizeRef.current);
+    // Local immediate feedback: draw segment between prev and current point
+    const ctx = ctxRef.current;
+    if (ctx && wrapRef.current) {
+      const { w, h } = dim();
+      drawPolyline(ctx, [prev, p], colorRef.current, sizeRef.current, w, h);
+    }
+
+    lastLocalPt.current = p;
+    strokeBuffer.current.push(p);
     historyRef.current.at(-1)?.points.push(p);
 
-    // Throttle emits to ~30 per second
+    // Throttle network emissions to ~30-40 per second, but NEVER drop points in between!
     const now = Date.now();
-    if (now - lastEmitTs.current < 33) return;
-    lastEmitTs.current = now;
-
-    getSocket().emit('draw:stroke', {
-      points: [prev, p],
-      color: colorRef.current,
-      size:  sizeRef.current,
-      type:  'stroke',
-    });
+    if (now - lastEmitTs.current >= 25) {
+      lastEmitTs.current = now;
+      emitBuffer(false);
+    }
   }
 
-  function onUp() { isDownRef.current = false; }
+  function onUp() {
+    if (!isDownRef.current) return;
+    isDownRef.current = false;
+    // Flush any remaining un-emitted points in the stroke
+    emitBuffer(true);
+    lastLocalPt.current = null;
+  }
 
   return (
-    <div ref={wrapRef} className="w-full h-full relative overflow-hidden rounded-2xl shadow-inner">
+    <div ref={wrapRef} className="w-full h-full relative overflow-hidden rounded-2xl shadow-inner bg-[#FAFAF8]">
       <canvas
         ref={canvasRef}
-        className="absolute inset-0 touch-none"
+        className="absolute inset-0 touch-none block"
         style={{ cursor: mode === 'draw' ? 'crosshair' : 'default' }}
         onMouseDown={e  => onDown(e.clientX, e.clientY)}
         onMouseMove={e  => onMove(e.clientX, e.clientY)}
         onMouseUp={onUp}
         onMouseLeave={onUp}
-        onTouchStart={e => { e.preventDefault(); onDown(e.touches[0].clientX, e.touches[0].clientY); }}
-        onTouchMove={e  => { e.preventDefault(); onMove(e.touches[0].clientX, e.touches[0].clientY); }}
-        onTouchEnd={e   => { e.preventDefault(); onUp(); }}
+        onTouchStart={e => {
+          e.preventDefault();
+          const t = e.touches[0];
+          onDown(t.clientX, t.clientY);
+        }}
+        onTouchMove={e => {
+          e.preventDefault();
+          const t = e.touches[0];
+          onMove(t.clientX, t.clientY);
+        }}
+        onTouchEnd={e => {
+          e.preventDefault();
+          onUp();
+        }}
+        onTouchCancel={e => {
+          e.preventDefault();
+          onUp();
+        }}
       />
     </div>
   );

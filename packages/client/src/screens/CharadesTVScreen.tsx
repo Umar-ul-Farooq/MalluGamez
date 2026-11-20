@@ -95,7 +95,17 @@ export default function CharadesTVScreen({ hostIP }: Props) {
   // VIEW 1: CHARADES LOBBY & TEAM SELECTION
   // ──────────────────────────────────────────────────────────────────────────
   if (room.phase === 'lobby' || !charadesState?.teamsLocked) {
-    const joinUrl = `http://${hostIP || 'localhost'}:3000/lobby?room=${room.code}`;
+    const isHostedDomain = typeof window !== 'undefined' &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1';
+
+    const joinUrl = isHostedDomain
+      ? `${window.location.origin}/lobby?room=${room.code}`
+      : `http://${hostIP || 'localhost'}:3000/lobby?room=${room.code}`;
+
+    const displayUrl = isHostedDomain
+      ? window.location.host
+      : (hostIP ? `http://${hostIP}:3000` : 'getting IP…');
 
     return (
       <div className="h-full flex flex-col bg-gradient-to-br from-gray-950 via-purple-950/30 to-gray-950 overflow-hidden select-none">
@@ -142,7 +152,7 @@ export default function CharadesTVScreen({ hostIP }: Props) {
             <p className="text-white/50 text-[11px] break-all leading-tight">
               or visit:<br />
               <span className="text-amber-300 font-mono text-xs font-semibold">
-                {hostIP ? `http://${hostIP}:3000` : 'getting IP…'}
+                {displayUrl}
               </span>
             </p>
           </div>

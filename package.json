@@ -9,7 +9,8 @@
     "dev": "concurrently \"npm run dev --workspace=packages/server\" \"npm run dev --workspace=packages/client\"",
     "dev:server": "npm run dev --workspace=packages/server",
     "dev:client": "npm run dev --workspace=packages/client",
-    "build": "npm run build --workspace=packages/shared && npm run build --workspace=packages/server && npm run build --workspace=packages/client"
+    "build": "npm run build --workspace=packages/server && npm run build --workspace=packages/client",
+    "start": "node packages/server/dist/index.js"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

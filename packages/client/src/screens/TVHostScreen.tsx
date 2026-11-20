@@ -82,7 +82,17 @@ export default function TVHostScreen() {
   // VIEW 1: LOBBY
   // ──────────────────────────────────────────────────────────────────────────
   if (room.phase === 'lobby') {
-    const joinUrl = `http://${hostIP || 'localhost'}:3000/lobby?room=${room.code}`;
+    const isHostedDomain = typeof window !== 'undefined' &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1';
+
+    const joinUrl = isHostedDomain
+      ? `${window.location.origin}/lobby?room=${room.code}`
+      : `http://${hostIP || 'localhost'}:3000/lobby?room=${room.code}`;
+
+    const displayUrl = isHostedDomain
+      ? window.location.host
+      : (hostIP ? `http://${hostIP}:3000` : 'getting IP…');
 
     return (
       <div className="h-full flex flex-col bg-gradient-to-br from-gray-950 via-brand-900/25 to-gray-950 overflow-hidden select-none">
@@ -124,7 +134,7 @@ export default function TVHostScreen() {
             <p className="text-white/50 text-xs text-center break-all">
               or browse to:<br />
               <span className="text-brand-300 font-mono text-sm font-semibold">
-                {hostIP ? `http://${hostIP}:3000` : 'getting IP…'}
+                {displayUrl}
               </span>
             </p>
           </div>

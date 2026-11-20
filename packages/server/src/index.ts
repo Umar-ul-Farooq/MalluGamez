@@ -3,6 +3,8 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import os from 'os';
+import path from 'path';
+import fs from 'fs';
 import type { ClientToServerEvents, ServerToClientEvents } from '@chitram/shared';
 import { registerSocketHandlers } from './socket/index';
 
@@ -18,6 +20,18 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
 
 app.use(cors());
 app.use(express.json());
+
+// Serve built frontend assets in production if available
+const clientDistCandidates = [
+  path.resolve(__dirname, '../../client/dist'),
+  path.resolve(__dirname, '../client/dist'),
+  path.resolve(process.cwd(), 'packages/client/dist'),
+];
+const clientDistPath = clientDistCandidates.find(p => fs.existsSync(p));
+
+if (clientDistPath) {
+  app.use(express.static(clientDistPath));
+}
 
 // Health check
 app.get('/health', (_req, res) => {
@@ -47,11 +61,23 @@ function getLocalIP(): string {
 // Register all socket event handlers
 registerSocketHandlers(io);
 
+// In production, fallback any unmatched route to client index.html (SPA routing)
+if (clientDistPath) {
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(clientDistPath, 'index.html'));
+  });
+}
+
 const PORT = process.env.PORT ?? 3001;
 httpServer.listen(PORT, () => {
   const ip = getLocalIP();
   console.log(`\n🎨 Chitram server running`);
+  console.log(`   Port:    ${PORT}`);
   console.log(`   Local:   http://localhost:${PORT}`);
   console.log(`   Network: http://${ip}:${PORT}`);
-  console.log(`   Players should connect to: http://${ip}:3000\n`);
+  if (clientDistPath) {
+    console.log(`   Serving client build from: ${clientDistPath}\n`);
+  } else {
+    console.log(`   Players in dev should connect to: http://${ip}:3000\n`);
+  }
 });

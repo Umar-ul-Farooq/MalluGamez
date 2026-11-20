@@ -43,6 +43,14 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rm: Roo
     }
   });
 
+  socket.on('room:leave', () => {
+    try {
+      rm.handleDisconnect(socket.id, io);
+    } catch (err: any) {
+      console.error(err);
+    }
+  });
+
   socket.on('game:start', () => {
     try {
       const room = rm.getRoomByPlayer(socket.id);

@@ -64,6 +64,8 @@ export class GameEngine {
   }
 
   endRound() {
+    if (this.room.phase === 'round-end' || this.room.phase === 'game-end') return;
+
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
@@ -75,11 +77,13 @@ export class GameEngine {
       scores: [...this.room.players],
     });
 
-    // Auto-advance to next round after 5 seconds
+    // Auto-advance to next round after 4 seconds
     setTimeout(() => {
-      this.room.phase = 'playing';
-      this.startNextRound();
-    }, 5000);
+      if (this.room.phase === 'round-end') {
+        this.room.phase = 'playing';
+        this.startNextRound();
+      }
+    }, 4000);
   }
 
   private endGame() {

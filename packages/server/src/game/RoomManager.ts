@@ -93,10 +93,14 @@ export class RoomManager {
     if (!winner) return 0;
     const points = 100;
     winner.score += points;
-    // Also give drawer points
+    // Drawer gets equal points as the guesser
     const drawer = room.players.find(p => p.isDrawing);
-    if (drawer) drawer.score += 50;
+    if (drawer) drawer.score += points;
     return points;
+  }
+
+  endRound(code: string) {
+    this.engines.get(code)?.endRound();
   }
 
   // ─── Disconnect ─────────────────────────────────────────────────────────

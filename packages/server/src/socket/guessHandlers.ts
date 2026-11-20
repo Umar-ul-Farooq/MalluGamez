@@ -24,6 +24,9 @@ export function registerGuessHandlers(io: GameServer, socket: GameSocket, rm: Ro
       winnerName: winner.name,
       points,
     });
-    console.log(`[guess] ${winner.name} awarded ${points} points in room ${room.code}`);
+    console.log(`[guess] ${winner.name} & drawer ${drawer.name} awarded ${points} points in room ${room.code}`);
+
+    // Immediately conclude the round without waiting for the timer to expire
+    rm.endRound(room.code);
   });
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { getSocket } from '../lib/socket';
 import { useGameStore } from '../store/gameStore';
@@ -11,9 +12,16 @@ const TIMER_OPTIONS = [30, 60, 90, 120];
 const ROUND_OPTIONS = [2, 3, 5];
 
 export default function TVHostScreen() {
+  const navigate = useNavigate();
   const { room, connected, timerRemaining } = useGameStore();
   const [creating, setCreating] = useState(false);
   const [hostIP, setHostIP] = useState<string>('');
+
+  function handleHome() {
+    getSocket().emit('room:leave');
+    useGameStore.getState().reset();
+    navigate('/');
+  }
 
   // Fetch the machine's real local IP for the QR code
   useEffect(() => {
@@ -72,11 +80,19 @@ export default function TVHostScreen() {
       <div className="h-full flex flex-col bg-gradient-to-br from-gray-950 via-brand-900/25 to-gray-950 overflow-hidden select-none">
         {/* Top bar */}
         <div className="flex items-center justify-between px-12 pt-8 pb-4">
-          <div className="flex items-center gap-4">
-            <span className="text-5xl">🎨</span>
-            <div>
-              <h1 className="text-4xl font-extrabold text-white tracking-tight">Chitram</h1>
-              <p className="ml-text text-brand-300 text-xl font-semibold">ചിത്രം പാർട്ടി ഗെയിം</p>
+          <div className="flex items-center gap-6">
+            <button
+              onClick={handleHome}
+              className="btn-secondary text-sm py-2.5 px-5 flex items-center gap-2 hover:bg-white/20 transition-all font-semibold"
+            >
+              ← Home / പ്രധാന പേജ്
+            </button>
+            <div className="flex items-center gap-4">
+              <span className="text-5xl">🎨</span>
+              <div>
+                <h1 className="text-4xl font-extrabold text-white tracking-tight">Chitram</h1>
+                <p className="ml-text text-brand-300 text-xl font-semibold">ചിത്രം പാർട്ടി ഗെയിം</p>
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-full px-5 py-2.5 backdrop-blur-md">
@@ -237,12 +253,20 @@ export default function TVHostScreen() {
           </div>
         </div>
 
-        <button
-          onClick={startGame}
-          className="btn-primary text-xl py-4 px-10"
-        >
-          🔄 Play Again / വീണ്ടും കളിക്കാം
-        </button>
+        <div className="flex gap-4">
+          <button
+            onClick={handleHome}
+            className="btn-secondary text-xl py-4 px-8"
+          >
+            🏠 Home / പ്രധാന പേജ്
+          </button>
+          <button
+            onClick={startGame}
+            className="btn-primary text-xl py-4 px-10"
+          >
+            🔄 Play Again / വീണ്ടും കളിക്കാം
+          </button>
+        </div>
       </div>
     );
   }
@@ -257,7 +281,14 @@ export default function TVHostScreen() {
       {/* ── Top Header ────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-10 py-4 border-b border-white/10 shrink-0 bg-gray-900/60 backdrop-blur-md">
         {/* Left: Logo & Round */}
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-5">
+          <button
+            onClick={handleHome}
+            className="btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5 text-white/70 hover:text-white font-medium"
+            title="Leave room and return to home page"
+          >
+            ← Exit
+          </button>
           <div className="flex items-center gap-3">
             <span className="text-3xl">🎨</span>
             <span className="text-2xl font-black text-white">Chitram</span>

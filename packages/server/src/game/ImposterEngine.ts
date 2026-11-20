@@ -46,8 +46,8 @@ export class ImposterEngine {
 
   startGame() {
     const nonHostPlayers = this.room.players.filter(p => !p.isHost);
-    if (nonHostPlayers.length < 4) {
-      throw new Error('At least 4 players are required to start The Imposter');
+    if (nonHostPlayers.length < 3) {
+      throw new Error('At least 3 players are required to start The Imposter');
     }
 
     this.room.phase = 'playing';
@@ -97,7 +97,7 @@ export class ImposterEngine {
     this.currentImposterIds.clear();
 
     const nonHostPlayers = this.room.players.filter(p => !p.isHost);
-    if (nonHostPlayers.length < 4) {
+    if (nonHostPlayers.length < 3) {
       this.endGame();
       return;
     }

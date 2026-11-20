@@ -67,7 +67,7 @@ export default function HomeScreen() {
                 </div>
                 <p className="ml-text text-red-400 text-sm font-bold">ആരാണ് ചതിയൻ? കണ്ടുപിടിക്കൂ!</p>
                 <p className="text-white/50 text-xs mt-1">
-                  4–12 Players • Social deduction • Verbal clues & secret voting
+                  3–12 Players • Social deduction • Verbal clues & secret voting
                 </p>
               </div>
             </div>

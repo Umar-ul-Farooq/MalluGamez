@@ -52,7 +52,7 @@ export default function ImposterTVScreen({ hostIP }: Props) {
   if (!room) return null;
 
   const players = room.players.filter(p => !p.isHost);
-  const canStart = players.length >= 4;
+  const canStart = players.length >= 3;
 
   function updateImposterSettings(patch: Partial<ImposterSettings>) {
     const updated = { ...settings, ...patch };
@@ -158,7 +158,7 @@ export default function ImposterTVScreen({ hostIP }: Props) {
               </span>
             </p>
             <div className="card py-2 px-3 bg-red-950/30 border border-red-500/20 w-full text-center">
-              <p className="text-red-200 text-xs font-bold">4–12 Players</p>
+              <p className="text-red-200 text-xs font-bold">3–12 Players</p>
               <p className="text-white/40 text-[10px]">Social Deduction Party Game</p>
             </div>
           </div>
@@ -171,7 +171,7 @@ export default function ImposterTVScreen({ hostIP }: Props) {
                 <span className="text-sm font-normal text-white/50">({players.length})</span>
               </h2>
               <span className="text-xs text-white/40 font-semibold">
-                {players.length < 4 ? `Need ${4 - players.length} more to start` : 'Ready to start!'}
+                {players.length < 3 ? `Need ${3 - players.length} more to start` : 'Ready to start!'}
               </span>
             </div>
 
@@ -305,7 +305,7 @@ export default function ImposterTVScreen({ hostIP }: Props) {
                 className={`btn-primary w-full py-3.5 text-base font-black rounded-2xl flex items-center justify-center gap-2 transition-all
                   ${!canStart ? 'opacity-35 cursor-not-allowed shadow-none' : 'bg-red-600 hover:bg-red-500 text-white shadow-xl shadow-red-950/60 hover:scale-105'}`}
               >
-                {canStart ? '🕵️ Start The Imposter!' : '⏳ Need 4+ Players'}
+                {canStart ? '🕵️ Start The Imposter!' : '⏳ Need 3+ Players'}
               </button>
             </div>
           </div>

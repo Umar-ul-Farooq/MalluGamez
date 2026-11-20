@@ -58,7 +58,7 @@ export default function ImposterMobileScreen() {
           <p className="text-white/40 text-xs uppercase font-bold tracking-widest">Your Nickname</p>
           <h3 className="text-2xl font-black text-white">{myPlayer?.name || 'Player'}</h3>
           <p className="text-white/60 text-xs">
-            {players.length} players joined • {players.length < 4 ? `Need ${4 - players.length} more` : 'Waiting for host to start…'}
+            {players.length} players joined • {players.length < 3 ? `Need ${3 - players.length} more` : 'Waiting for host to start…'}
           </p>
         </div>
 

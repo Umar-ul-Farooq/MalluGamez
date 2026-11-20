@@ -7,6 +7,7 @@ import type {
   MovieReveal,
   ImposterPublicState,
   ImposterSecretPayload,
+  EmojiPublicState,
 } from '@chitram/shared';
 
 export interface Toast {
@@ -50,6 +51,10 @@ interface GameState {
   imposterSecret: ImposterSecretPayload | null;
   hasVotedImposter: boolean;
 
+  // ─── Emoji Movie Challenge In-game ────────────────────────────────────────
+  emojiState: EmojiPublicState | null;
+  emojiGuessFeedback: { isCorrect: boolean; message: string; points?: number } | null;
+
   // ─── UI ───────────────────────────────────────────────────────────────────
   toasts: Toast[];
 
@@ -68,6 +73,8 @@ interface GameState {
   setImposterState: (s: ImposterPublicState) => void;
   setImposterSecret: (s: ImposterSecretPayload | null) => void;
   setHasVotedImposter: (v: boolean) => void;
+  setEmojiState: (s: EmojiPublicState) => void;
+  setEmojiGuessFeedback: (f: { isCorrect: boolean; message: string; points?: number } | null) => void;
   handleCharadesRoundEnd: (p: {
     result: 'correct' | 'timeout';
     pointsAwardedTo: 'A' | 'B';
@@ -100,6 +107,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   imposterState: null,
   imposterSecret: null,
   hasVotedImposter: false,
+  emojiState: null,
+  emojiGuessFeedback: null,
   toasts: [],
 
   setMyId:      (id) => set({ myId: id }),
@@ -135,6 +144,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   setImposterState: (s) => set({ imposterState: s }),
   setImposterSecret: (s) => set({ imposterSecret: s }),
   setHasVotedImposter: (v) => set({ hasVotedImposter: v }),
+  setEmojiState: (s) => set({ emojiState: s }),
+  setEmojiGuessFeedback: (f) => set({ emojiGuessFeedback: f }),
   handleCharadesRoundEnd: (p) => {
     set({ lastCharadesRoundEnd: p, secretMovie: null });
     const teamName = p.pointsAwardedTo === 'A'
@@ -161,7 +172,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     timerRemaining: 0, lastAward: null, roundEndWord: null,
     leaderboard: [], charadesState: null, secretMovie: null,
     lastCharadesRoundEnd: null, imposterState: null, imposterSecret: null,
-    hasVotedImposter: false, toasts: [],
+    hasVotedImposter: false, emojiState: null, emojiGuessFeedback: null, toasts: [],
   }),
 }));
 

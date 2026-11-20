@@ -92,6 +92,17 @@ export function useGameEvents() {
     socket.on('imposter:secret', store.setImposterSecret);
     socket.on('imposter:vote-registered', () => store.setHasVotedImposter(true));
 
+    // ── Emoji Events ──
+    socket.on('emoji:state', store.setEmojiState);
+    socket.on('emoji:guess-result', (res) => {
+      store.setEmojiGuessFeedback(res);
+      if (res.isCorrect) {
+        store.addToast(res.message, 'success');
+      } else {
+        store.addToast(res.message, 'error');
+      }
+    });
+
     // If already connected when this effect runs
     if (socket.connected) onConnect();
 
@@ -113,6 +124,8 @@ export function useGameEvents() {
       socket.off('charades:round-ended');
       socket.off('imposter:state');
       socket.off('imposter:secret');
+      socket.off('emoji:state');
+      socket.off('emoji:guess-result');
       socket.off('imposter:vote-registered');
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps

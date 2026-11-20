@@ -1,6 +1,6 @@
 // ─── Game Platform ──────────────────────────────────────────────────────────
 
-export type GameType = 'pictionary' | 'charades' | 'imposter';
+export type GameType = 'pictionary' | 'charades' | 'imposter' | 'emoji';
 
 // ─── Players ────────────────────────────────────────────────────────────────
 
@@ -35,12 +35,14 @@ export interface Room {
   settings: RoomSettings;
   charadesSettings?: CharadesSettings;
   imposterSettings?: ImposterSettings;
+  emojiSettings?: EmojiSettings;
   currentRound: number;
   currentDrawerId: string | null;
   currentWord: string | null;       // only sent to drawer
   currentCategory?: string;         // public category hint (e.g. 🎬 സിനിമ, 🍲 ഭക്ഷണം)
   charadesState?: CharadesPublicState;
   imposterState?: ImposterPublicState;
+  emojiState?: EmojiPublicState;
 }
 
 // ─── Dumb Charades Types ────────────────────────────────────────────────────
@@ -199,6 +201,53 @@ export interface ImposterSecretPayload {
   otherImposters?: string[];      // names of fellow imposters if imposterCount > 1
 }
 
+// ─── Emoji Movie Challenge Types ─────────────────────────────────────────────
+
+export type { EmojiDifficulty, EmojiGameMode, EmojiMovieItem } from './emojiMovieBank';
+
+export interface EmojiSettings {
+  mode: 'race' | 'turn';          // 'race' (all guess together) | 'turn' (turn-based guessing)
+  totalQuestions: number;         // 5 | 10 | 15 | 20 (default 10)
+  difficulty: 'easy' | 'medium' | 'hard' | 'mixed';
+  timerSeconds: number;           // 15 | 30 | 45 (default 30)
+}
+
+export type EmojiRoundPhase =
+  | 'question'                    // live question, timer ticking, players guessing
+  | 'reveal'                      // correct movie revealed, scores updated
+  | 'game-end';                   // final leaderboard / podium
+
+export interface EmojiPlayerAnswer {
+  playerId: string;
+  playerName: string;
+  guess: string;
+  isCorrect: boolean;
+  timeTakenMs: number;
+  pointsAwarded: number;
+}
+
+export interface EmojiPublicState {
+  currentQuestionIndex: number;   // 0-based
+  totalQuestions: number;
+  roundPhase: EmojiRoundPhase;
+  emojis: string;
+  category?: string;
+  difficulty: string;
+  revealedHint: string | null;
+  mode: 'race' | 'turn';
+  currentTurnPlayerId?: string | null;
+  currentTurnPlayerName?: string | null;
+  answeredPlayerIds: string[];    // IDs of players who submitted correct or max guesses
+  correctPlayerIds: string[];     // IDs of players who got it right this question
+  revealedMovie: {
+    title: string;
+    manglish: string;
+    year?: number;
+    hint?: string;
+  } | null;                       // ONLY populated during 'reveal' phase!
+  roundAnswers?: EmojiPlayerAnswer[];
+}
+
 // ─── Socket.IO Events (Client → Server) ─────────────────────────────────────
 
 export interface ClientToServerEvents {
@@ -241,6 +290,14 @@ export interface ClientToServerEvents {
   'imposter:submit-word-guess': (payload: { guess: string }) => void; // caught imposter guesses word
   'imposter:next-round': () => void; // host advances round
   'imposter:restart-game': () => void; // host restarts
+
+  // ── Emoji Movie Challenge Events ──
+  'emoji:update-settings': (payload: Partial<EmojiSettings>) => void; // host only
+  'emoji:start-game': () => void; // host only
+  'emoji:submit-guess': (payload: { guess: string }) => void; // player submits guess
+  'emoji:reveal-hint': () => void; // host reveals hint early
+  'emoji:next-question': () => void; // host advances question
+  'emoji:restart-game': () => void; // host restarts game
 }
 
 // ─── Socket.IO Events (Server → Client) ─────────────────────────────────────
@@ -279,6 +336,10 @@ export interface ServerToClientEvents {
   'imposter:state': (state: ImposterPublicState) => void;
   'imposter:secret': (payload: ImposterSecretPayload) => void; // Delivered ONLY to specific player privately!
   'imposter:vote-registered': () => void;
+
+  // Emoji Movie Challenge
+  'emoji:state': (state: EmojiPublicState) => void;
+  'emoji:guess-result': (payload: { isCorrect: boolean; message: string; points?: number }) => void;
 }
 
 // ─── Public room state (word hidden) ────────────────────────────────────────
@@ -298,3 +359,6 @@ export interface DrawStroke {
   size: number;
   type: 'stroke' | 'start';
 }
+
+// ─── Export Emoji Movie Bank & Validation ───────────────────────────────────
+export * from './emojiMovieBank';

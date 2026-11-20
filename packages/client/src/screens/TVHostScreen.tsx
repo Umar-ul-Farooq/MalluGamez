@@ -8,6 +8,7 @@ import Timer from '../components/Timer';
 import RoundEndOverlay from '../components/RoundEndOverlay';
 import CharadesTVScreen from './CharadesTVScreen';
 import ImposterTVScreen from './ImposterTVScreen';
+import EmojiTVScreen from './EmojiTVScreen';
 import type { RoomSettings, GameType } from '@chitram/shared';
 
 const TIMER_OPTIONS = [30, 60, 90, 120];
@@ -67,6 +68,11 @@ export default function TVHostScreen() {
   // If this room is for The Imposter, render Imposter TV Screen
   if (room.gameType === 'imposter') {
     return <ImposterTVScreen hostIP={hostIP} />;
+  }
+
+  // If this room is for Emoji Movie Challenge, render Emoji TV Screen
+  if (room.gameType === 'emoji') {
+    return <EmojiTVScreen hostIP={hostIP} />;
   }
 
   const players = room.players.filter(p => !p.isHost);

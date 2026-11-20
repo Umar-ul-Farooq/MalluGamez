@@ -1,9 +1,10 @@
-import type { Room, Player, RoomSettings, RoomPublicState, GameType, CharadesSettings, ImposterSettings } from '@chitram/shared';
+import type { Room, Player, RoomSettings, RoomPublicState, GameType, CharadesSettings, ImposterSettings, EmojiSettings } from '@chitram/shared';
 import type { GameServer } from '../socket/index';
 import { GameEngine } from './GameEngine';
 import { WordBank } from './WordBank';
 import { CharadesEngine } from './CharadesEngine';
 import { ImposterEngine } from './ImposterEngine';
+import { EmojiEngine } from './EmojiEngine';
 
 function generateRoomCode(): string {
   return Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -15,6 +16,7 @@ export class RoomManager {
   private engines = new Map<string, GameEngine>();
   private charadesEngines = new Map<string, CharadesEngine>();
   private imposterEngines = new Map<string, ImposterEngine>();
+  private emojiEngines = new Map<string, EmojiEngine>();
   private disconnectTimeouts = new Map<string, NodeJS.Timeout>();
 
   // ─── Create / Join ──────────────────────────────────────────────────────
@@ -54,6 +56,12 @@ export class RoomManager {
         category: 'mixed',
         discussionDurationSeconds: 60,
         votingDurationSeconds: 30,
+      } : undefined,
+      emojiSettings: gameType === 'emoji' ? {
+        mode: 'race',
+        totalQuestions: 10,
+        difficulty: 'mixed',
+        timerSeconds: 30,
       } : undefined,
       currentRound: 0,
       currentDrawerId: null,
@@ -100,6 +108,12 @@ export class RoomManager {
       const imposterEngine = this.imposterEngines.get(code);
       if (imposterEngine) {
         imposterEngine.handlePlayerReconnect(oldSocketId, socketId, existingPlayer);
+      }
+
+      // Notify Emoji engine of reconnection
+      const emojiEngine = this.emojiEngines.get(code);
+      if (emojiEngine) {
+        emojiEngine.handlePlayerReconnect(oldSocketId, socketId, existingPlayer);
       }
 
       return { room, player: existingPlayer };
@@ -181,6 +195,29 @@ export class RoomManager {
       };
       engine = new ImposterEngine(room, io, settings);
       this.imposterEngines.set(code, engine);
+    }
+    return engine;
+  }
+
+  // ─── Emoji Movie Challenge Integration ───────────────────────────────────
+
+  getEmojiEngine(code: string): EmojiEngine | undefined {
+    return this.emojiEngines.get(code);
+  }
+
+  ensureEmojiEngine(code: string, io: GameServer): EmojiEngine {
+    let engine = this.emojiEngines.get(code);
+    if (!engine) {
+      const room = this.rooms.get(code);
+      if (!room) throw new Error('Room not found');
+      const settings = room.emojiSettings ?? {
+        mode: 'race',
+        totalQuestions: 10,
+        difficulty: 'mixed',
+        timerSeconds: 30,
+      };
+      engine = new EmojiEngine(room, io, settings);
+      this.emojiEngines.set(code, engine);
     }
     return engine;
   }
@@ -304,6 +341,8 @@ export class RoomManager {
     this.charadesEngines.delete(code);
     this.imposterEngines.get(code)?.stop();
     this.imposterEngines.delete(code);
+    this.emojiEngines.get(code)?.destroy();
+    this.emojiEngines.delete(code);
   }
 
   // ─── Helpers ────────────────────────────────────────────────────────────

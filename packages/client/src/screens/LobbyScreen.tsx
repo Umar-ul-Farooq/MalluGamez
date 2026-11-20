@@ -4,6 +4,7 @@ import { getSocket } from '../lib/socket';
 import { useGameStore } from '../store/gameStore';
 import CharadesMobileScreen from './CharadesMobileScreen';
 import ImposterMobileScreen from './ImposterMobileScreen';
+import EmojiMobileScreen from './EmojiMobileScreen';
 
 type JoinState = 'form' | 'waiting';
 
@@ -130,6 +131,11 @@ export default function LobbyScreen() {
   // If this room is for The Imposter, render Imposter Mobile Controller
   if (room.gameType === 'imposter') {
     return <ImposterMobileScreen />;
+  }
+
+  // If this room is for Emoji Movie Challenge, render Emoji Mobile Controller
+  if (room.gameType === 'emoji') {
+    return <EmojiMobileScreen />;
   }
 
   const players = room.players.filter(p => !p.isHost);

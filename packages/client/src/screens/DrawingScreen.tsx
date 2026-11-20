@@ -22,7 +22,7 @@ const COLORS = [
 const SIZES = [3, 6, 12, 20];
 
 export default function DrawingScreen() {
-  const { room, secretWord, secretManglish, timerRemaining } = useGameStore();
+  const { room, secretWord, secretManglish, secretCategory, timerRemaining } = useGameStore();
   const [color,     setColor]     = useState(COLORS[0]);
   const [brushSize, setBrushSize] = useState(SIZES[1]);
   const [showAward, setShowAward] = useState(false);
@@ -62,11 +62,16 @@ export default function DrawingScreen() {
       {/* ── Secret word ─────────────────────────────────────────────────────── */}
       <div className="px-4 pb-2 shrink-0 text-center">
         <div className="inline-flex flex-col items-center bg-brand-600/20 border border-brand-500/40
-                        rounded-2xl px-6 py-3">
+                        rounded-2xl px-6 py-2.5">
+          {secretCategory && (
+            <span className="text-xs font-bold text-yellow-300 uppercase tracking-wider bg-yellow-500/20 px-3 py-0.5 rounded-full mb-1">
+              {secretCategory}
+            </span>
+          )}
           <p className="ml-text text-3xl font-extrabold text-brand-200 leading-tight">
             {secretWord}
           </p>
-          <p className="text-white/40 text-sm mt-0.5">{secretManglish}</p>
+          <p className="text-white/50 text-sm font-medium mt-0.5">{secretManglish}</p>
         </div>
       </div>
 

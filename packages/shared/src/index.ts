@@ -29,6 +29,7 @@ export interface Room {
   currentRound: number;
   currentDrawerId: string | null;
   currentWord: string | null;       // only sent to drawer
+  currentCategory?: string;         // public category hint (e.g. 🎬 സിനിമ, 🍲 ഭക്ഷണം)
 }
 
 // ─── Socket.IO Events (Client → Server) ─────────────────────────────────────
@@ -54,7 +55,7 @@ export interface ServerToClientEvents {
   'room:updated': (room: RoomPublicState) => void;
   'room:error':   (message: string) => void;
 
-  'game:word':    (payload: { word: string; manglish: string }) => void; // drawer only
+  'game:word':    (payload: { word: string; manglish: string; category?: string }) => void; // drawer only
   'game:started': (room: RoomPublicState) => void;
 
   'draw:stroke':  (stroke: DrawStroke) => void;

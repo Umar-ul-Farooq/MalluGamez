@@ -18,6 +18,7 @@ interface GameState {
   // ─── In-game ──────────────────────────────────────────────────────────────
   secretWord: string | null;
   secretManglish: string | null;
+  secretCategory: string | null;
   timerRemaining: number;
   lastAward: { winnerId: string; winnerName: string; points: number } | null;
   roundEndWord: string | null;
@@ -31,7 +32,7 @@ interface GameState {
   setConnected: (v: boolean) => void;
   setRoom:      (room: RoomPublicState) => void;
   handleGameStarted: (room: RoomPublicState) => void;
-  setSecretWord:(word: string, manglish: string) => void;
+  setSecretWord:(word: string, manglish: string, category?: string) => void;
   setTimer:     (remaining: number) => void;
   handleAward:  (p: { winnerId: string; winnerName: string; points: number }) => void;
   handleRoundEnd: (p: { word: string; scores: Player[] }) => void;
@@ -47,6 +48,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   room: null,
   secretWord: null,
   secretManglish: null,
+  secretCategory: null,
   timerRemaining: 0,
   lastAward: null,
   roundEndWord: null,
@@ -63,8 +65,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     lastAward: null,
   }),
 
-  setSecretWord: (word, manglish) =>
-    set({ secretWord: word, secretManglish: manglish }),
+  setSecretWord: (word, manglish, category) =>
+    set({ secretWord: word, secretManglish: manglish, secretCategory: category ?? null }),
 
   setTimer: (remaining) => set({ timerRemaining: remaining }),
 
@@ -91,7 +93,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     set(s => ({ toasts: s.toasts.filter(t => t.id !== id) })),
 
   reset: () => set({
-    room: null, secretWord: null, secretManglish: null,
+    room: null, secretWord: null, secretManglish: null, secretCategory: null,
     timerRemaining: 0, lastAward: null, roundEndWord: null,
     leaderboard: [], toasts: [],
   }),

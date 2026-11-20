@@ -1,7 +1,6 @@
 import type { Room } from '@chitram/shared';
 import type { GameServer } from '../socket/index';
-
-interface Word { malayalam: string; manglish: string; }
+import type { WordItem } from './WordBank';
 
 export class GameEngine {
   private timer: NodeJS.Timeout | null = null;
@@ -10,7 +9,7 @@ export class GameEngine {
   constructor(
     private room: Room,
     private io: GameServer,
-    private wordBank: Word[],
+    private wordBank: WordItem[],
   ) {}
 
   startNextRound() {
@@ -35,6 +34,7 @@ export class GameEngine {
     // Pick a random word
     const word = this.wordBank[Math.floor(Math.random() * this.wordBank.length)];
     this.room.currentWord = word.malayalam;
+    this.room.currentCategory = word.category;
 
     // Broadcast updated public room state
     this.io.to(this.room.code).emit('game:started', this.publicState());
@@ -43,6 +43,7 @@ export class GameEngine {
     this.io.to(drawer.id).emit('game:word', {
       word: word.malayalam,
       manglish: word.manglish,
+      category: word.category,
     });
 
     // Start countdown timer

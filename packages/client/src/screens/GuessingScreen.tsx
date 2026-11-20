@@ -55,6 +55,12 @@ export default function GuessingScreen() {
 
         {/* Main Headlines */}
         <div className="space-y-2">
+          {room.currentCategory && (
+            <div className="inline-flex items-center gap-2 bg-yellow-400/20 border border-yellow-400/40 px-4 py-1 rounded-full shadow-md">
+              <span className="text-white/60 text-xs uppercase tracking-wider font-bold">Category:</span>
+              <span className="text-yellow-300 font-extrabold text-sm">{room.currentCategory}</span>
+            </div>
+          )}
           <h1 className="ml-text text-3xl font-black text-white tracking-tight">
             ടിവിയിൽ നോക്കൂ!
           </h1>

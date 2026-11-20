@@ -316,15 +316,24 @@ export default function TVHostScreen() {
         </div>
       </div>
 
-      {/* ── Banner: Drawer announcement ───────────────────────────────────── */}
-      <div className="bg-brand-900/30 border-b border-brand-500/20 px-8 py-2.5 flex items-center justify-center gap-4 text-center">
-        <span className="text-2xl animate-bounce">✏️</span>
-        <span className="text-white text-lg font-bold">
-          <span className="text-brand-300 underline underline-offset-4 decoration-brand-400">{currentDrawer?.name}</span> is drawing on their phone!
-        </span>
-        <span className="ml-text text-brand-200/80 text-base font-semibold">
-          ({currentDrawer?.name} ചിത്രം വരയ്ക്കുന്നു — ഉത്തരം ഉറക്കെ പറയൂ!)
-        </span>
+      {/* ── Banner: Drawer announcement & Category Clue ──────────────────── */}
+      <div className="bg-brand-900/30 border-b border-brand-500/20 px-10 py-2.5 flex items-center justify-between text-center">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl animate-bounce">✏️</span>
+          <span className="text-white text-lg font-bold">
+            <span className="text-brand-300 underline underline-offset-4 decoration-brand-400">{currentDrawer?.name}</span> is drawing!
+          </span>
+          <span className="ml-text text-brand-200/80 text-base font-semibold">
+            ({currentDrawer?.name} ചിത്രം വരയ്ക്കുന്നു)
+          </span>
+        </div>
+
+        {room.currentCategory && (
+          <div className="flex items-center gap-2 bg-yellow-400/20 border border-yellow-400/40 px-5 py-1.5 rounded-full shadow-lg">
+            <span className="text-white/60 text-xs uppercase tracking-wider font-bold">Category:</span>
+            <span className="text-yellow-300 font-black text-base">{room.currentCategory}</span>
+          </div>
+        )}
       </div>
 
       {/* ── Main Body: Canvas + Scoreboard ─────────────────────────────────── */}

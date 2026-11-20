@@ -36,8 +36,8 @@ export function useGameEvents() {
       else navigate('/guess');
     });
 
-    socket.on('game:word',     ({ word, manglish }) =>
-      store.setSecretWord(word, manglish));
+    socket.on('game:word',     ({ word, manglish, category }) =>
+      store.setSecretWord(word, manglish, category));
 
     socket.on('timer:tick',    ({ remaining }) => store.setTimer(remaining));
     socket.on('guess:awarded', store.handleAward);

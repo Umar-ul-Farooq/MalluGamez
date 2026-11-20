@@ -10,6 +10,15 @@ const ROUND_OPTIONS = [2, 3, 5];
 export default function TVHostScreen() {
   const { room, connected } = useGameStore();
   const [creating, setCreating] = useState(false);
+  const [hostIP, setHostIP] = useState<string>('');
+
+  // Fetch the machine's real local IP for the QR code
+  useEffect(() => {
+    fetch('/api/host-ip')
+      .then(r => r.json())
+      .then(({ ip }: { ip: string }) => setHostIP(ip))
+      .catch(() => setHostIP('localhost'));
+  }, []);
 
   // Create room as soon as socket connects
   useEffect(() => {
@@ -35,7 +44,7 @@ export default function TVHostScreen() {
     );
   }
 
-  const joinUrl = `${window.location.origin}/lobby?room=${room.code}`;
+  const joinUrl = `http://${hostIP || 'localhost'}:3000/lobby?room=${room.code}`;
   const players = room.players.filter(p => !p.isHost);
   const settings = room.settings;
   const canStart = players.length >= 1; // at least 1 non-host player
@@ -81,8 +90,10 @@ export default function TVHostScreen() {
             <QRCodeSVG value={joinUrl} size={200} />
           </div>
           <p className="text-white/40 text-xs text-center break-all px-2">
-            or visit<br />
-            <span className="text-white/60">{joinUrl}</span>
+            or type:<br />
+            <span className="text-white/70 font-mono text-sm">
+              {hostIP ? `${hostIP}:3000` : 'getting IP…'}
+            </span>
           </p>
         </div>
 

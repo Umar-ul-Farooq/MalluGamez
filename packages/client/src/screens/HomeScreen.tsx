@@ -53,7 +53,27 @@ export default function HomeScreen() {
             Choose a game to host on TV:
           </p>
 
-          {/* Game 1: Dumb Charades */}
+          {/* Game 1: The Imposter (NEW!) */}
+          <button
+            onClick={() => navigate('/tv?game=imposter')}
+            className="p-5 rounded-3xl bg-gradient-to-r from-red-950/50 via-purple-950/30 to-red-950/50 border-2 border-red-500/70 hover:border-red-400 text-left transition-all active:scale-95 shadow-xl group"
+          >
+            <div className="flex items-center gap-4">
+              <span className="text-4xl group-hover:scale-110 transition-transform">🕵️‍♂️</span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xl font-black text-white">The Imposter (ചതിയൻ)</h3>
+                  <span className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">NEW</span>
+                </div>
+                <p className="ml-text text-red-400 text-sm font-bold">ആരാണ് ചതിയൻ? കണ്ടുപിടിക്കൂ!</p>
+                <p className="text-white/50 text-xs mt-1">
+                  4–12 Players • Social deduction • Verbal clues & secret voting
+                </p>
+              </div>
+            </div>
+          </button>
+
+          {/* Game 2: Dumb Charades */}
           <button
             onClick={() => navigate('/tv?game=charades')}
             className="p-5 rounded-3xl bg-gradient-to-r from-purple-900/40 to-amber-900/30 border-2 border-amber-400/60 hover:border-amber-400 text-left transition-all active:scale-95 shadow-xl group"
@@ -63,7 +83,6 @@ export default function HomeScreen() {
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="text-xl font-black text-white">Dumb Charades</h3>
-                  <span className="bg-amber-400 text-gray-950 text-[10px] font-black px-2 py-0.5 rounded-full">NEW</span>
                 </div>
                 <p className="ml-text text-amber-300 text-sm font-bold">മലയാള സിനിമ ഡംബ് ഷെറേഡ്സ്</p>
                 <p className="text-white/50 text-xs mt-1">
@@ -73,7 +92,7 @@ export default function HomeScreen() {
             </div>
           </button>
 
-          {/* Game 2: Chitram (Drawing & Guessing) */}
+          {/* Game 3: Chitram (Drawing & Guessing) */}
           <button
             onClick={() => navigate('/tv?game=pictionary')}
             className="p-5 rounded-3xl bg-gradient-to-r from-blue-900/30 to-purple-900/30 border-2 border-blue-400/40 hover:border-blue-400 text-left transition-all active:scale-95 shadow-xl group"

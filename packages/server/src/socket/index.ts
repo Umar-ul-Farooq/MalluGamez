@@ -5,6 +5,7 @@ import { registerRoomHandlers } from './roomHandlers';
 import { registerDrawHandlers } from './drawHandlers';
 import { registerGuessHandlers } from './guessHandlers';
 import { registerCharadesHandlers } from './charadesHandlers';
+import { registerImposterHandlers } from './imposterHandlers';
 
 export type GameServer = Server<ClientToServerEvents, ServerToClientEvents>;
 
@@ -19,6 +20,7 @@ export function registerSocketHandlers(io: GameServer) {
     registerDrawHandlers(io, socket, roomManager);
     registerGuessHandlers(io, socket, roomManager);
     registerCharadesHandlers(io, socket, roomManager);
+    registerImposterHandlers(io, socket, roomManager);
 
     socket.on('disconnect', () => {
       console.log(`[socket] disconnected: ${socket.id}`);

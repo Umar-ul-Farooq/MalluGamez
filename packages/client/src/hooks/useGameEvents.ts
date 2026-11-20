@@ -81,6 +81,17 @@ export function useGameEvents() {
     socket.on('charades:incorrect-feedback', store.handleCharadesIncorrect);
     socket.on('charades:round-ended', store.handleCharadesRoundEnd);
 
+    // ── Imposter Events ──
+    socket.on('imposter:state', (state) => {
+      store.setImposterState(state);
+      // Reset vote state when round phase moves away from voting
+      if (state.roundPhase !== 'voting' && state.roundPhase !== 'tie-break') {
+        store.setHasVotedImposter(false);
+      }
+    });
+    socket.on('imposter:secret', store.setImposterSecret);
+    socket.on('imposter:vote-registered', () => store.setHasVotedImposter(true));
+
     // If already connected when this effect runs
     if (socket.connected) onConnect();
 
@@ -100,6 +111,9 @@ export function useGameEvents() {
       socket.off('charades:secret-movie');
       socket.off('charades:incorrect-feedback');
       socket.off('charades:round-ended');
+      socket.off('imposter:state');
+      socket.off('imposter:secret');
+      socket.off('imposter:vote-registered');
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

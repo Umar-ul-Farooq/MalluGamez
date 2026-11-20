@@ -1,8 +1,9 @@
-import type { Room, Player, RoomSettings, RoomPublicState, GameType, CharadesSettings } from '@chitram/shared';
+import type { Room, Player, RoomSettings, RoomPublicState, GameType, CharadesSettings, ImposterSettings } from '@chitram/shared';
 import type { GameServer } from '../socket/index';
 import { GameEngine } from './GameEngine';
 import { WordBank } from './WordBank';
 import { CharadesEngine } from './CharadesEngine';
+import { ImposterEngine } from './ImposterEngine';
 
 function generateRoomCode(): string {
   return Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -13,6 +14,7 @@ export class RoomManager {
   private playerToRoom = new Map<string, string>(); // socketId → roomCode
   private engines = new Map<string, GameEngine>();
   private charadesEngines = new Map<string, CharadesEngine>();
+  private imposterEngines = new Map<string, ImposterEngine>();
   private disconnectTimeouts = new Map<string, NodeJS.Timeout>();
 
   // ─── Create / Join ──────────────────────────────────────────────────────
@@ -44,6 +46,14 @@ export class RoomManager {
         actorSelection: 'random',
         teamAName: 'മിന്നൽ മുരളി',
         teamBName: 'പ്രേമം ഗ്യാങ്',
+      } : undefined,
+      imposterSettings: gameType === 'imposter' ? {
+        totalRounds: 5,
+        imposterCount: 1,
+        difficulty: 'mixed',
+        category: 'mixed',
+        discussionDurationSeconds: 60,
+        votingDurationSeconds: 30,
       } : undefined,
       currentRound: 0,
       currentDrawerId: null,
@@ -86,11 +96,17 @@ export class RoomManager {
         charadesEngine.handlePlayerReconnect(oldSocketId, socketId, existingPlayer);
       }
 
+      // Notify Imposter engine of reconnection
+      const imposterEngine = this.imposterEngines.get(code);
+      if (imposterEngine) {
+        imposterEngine.handlePlayerReconnect(oldSocketId, socketId, existingPlayer);
+      }
+
       return { room, player: existingPlayer };
     }
 
     // New player joining (even mid-game)
-    const maxPlayers = room.gameType === 'charades' ? 24 : 8;
+    const maxPlayers = room.gameType === 'charades' ? 24 : room.gameType === 'imposter' ? 12 : 8;
     if (room.players.length >= maxPlayers) throw new Error('Room is full');
 
     const player: Player = {
@@ -109,6 +125,11 @@ export class RoomManager {
     const charadesEngine = this.charadesEngines.get(code);
     if (charadesEngine) {
       charadesEngine.handlePlayerJoined(player);
+    }
+
+    const imposterEngine = this.imposterEngines.get(code);
+    if (imposterEngine) {
+      imposterEngine.handlePlayerJoined(player);
     }
 
     return { room, player };
@@ -135,6 +156,31 @@ export class RoomManager {
       };
       engine = new CharadesEngine(room, io, settings);
       this.charadesEngines.set(code, engine);
+    }
+    return engine;
+  }
+
+  // ─── Imposter Engine Integration ─────────────────────────────────────────
+
+  getImposterEngine(code: string): ImposterEngine | undefined {
+    return this.imposterEngines.get(code);
+  }
+
+  ensureImposterEngine(code: string, io: GameServer): ImposterEngine {
+    let engine = this.imposterEngines.get(code);
+    if (!engine) {
+      const room = this.rooms.get(code);
+      if (!room) throw new Error('Room not found');
+      const settings = room.imposterSettings ?? {
+        totalRounds: 5,
+        imposterCount: 1,
+        difficulty: 'mixed',
+        category: 'mixed',
+        discussionDurationSeconds: 60,
+        votingDurationSeconds: 30,
+      };
+      engine = new ImposterEngine(room, io, settings);
+      this.imposterEngines.set(code, engine);
     }
     return engine;
   }
@@ -214,6 +260,7 @@ export class RoomManager {
 
     // Unintentional disconnect (e.g. mobile screen locked, sleeping, switching apps):
     player.isOnline = false;
+    this.imposterEngines.get(code)?.handlePlayerDisconnect(socketId);
     io.to(code).emit('room:updated', this.publicState(code));
 
     // 2-minute grace period to unlock phone and re-attach
@@ -255,6 +302,8 @@ export class RoomManager {
     this.engines.delete(code);
     this.charadesEngines.get(code)?.stop();
     this.charadesEngines.delete(code);
+    this.imposterEngines.get(code)?.stop();
+    this.imposterEngines.delete(code);
   }
 
   // ─── Helpers ────────────────────────────────────────────────────────────

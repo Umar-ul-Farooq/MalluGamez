@@ -7,6 +7,7 @@ import Canvas from '../components/Canvas';
 import Timer from '../components/Timer';
 import RoundEndOverlay from '../components/RoundEndOverlay';
 import CharadesTVScreen from './CharadesTVScreen';
+import ImposterTVScreen from './ImposterTVScreen';
 import type { RoomSettings, GameType } from '@chitram/shared';
 
 const TIMER_OPTIONS = [30, 60, 90, 120];
@@ -61,6 +62,11 @@ export default function TVHostScreen() {
   // If this room is for Dumb Charades, render Charades TV Screen
   if (room.gameType === 'charades') {
     return <CharadesTVScreen hostIP={hostIP} />;
+  }
+
+  // If this room is for The Imposter, render Imposter TV Screen
+  if (room.gameType === 'imposter') {
+    return <ImposterTVScreen hostIP={hostIP} />;
   }
 
   const players = room.players.filter(p => !p.isHost);

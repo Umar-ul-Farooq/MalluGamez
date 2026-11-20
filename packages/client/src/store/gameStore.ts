@@ -5,6 +5,8 @@ import type {
   CharadesPublicState,
   SecretMoviePayload,
   MovieReveal,
+  ImposterPublicState,
+  ImposterSecretPayload,
 } from '@chitram/shared';
 
 export interface Toast {
@@ -43,6 +45,11 @@ interface GameState {
   } | null;
   incorrectFeedbackTrigger: number;
 
+  // ─── The Imposter In-game ─────────────────────────────────────────────────
+  imposterState: ImposterPublicState | null;
+  imposterSecret: ImposterSecretPayload | null;
+  hasVotedImposter: boolean;
+
   // ─── UI ───────────────────────────────────────────────────────────────────
   toasts: Toast[];
 
@@ -58,6 +65,9 @@ interface GameState {
   handleGameEnd:  (p: { leaderboard: Player[] }) => void;
   setCharadesState: (s: CharadesPublicState) => void;
   setSecretMovie: (m: SecretMoviePayload | null) => void;
+  setImposterState: (s: ImposterPublicState) => void;
+  setImposterSecret: (s: ImposterSecretPayload | null) => void;
+  setHasVotedImposter: (v: boolean) => void;
   handleCharadesRoundEnd: (p: {
     result: 'correct' | 'timeout';
     pointsAwardedTo: 'A' | 'B';
@@ -87,6 +97,9 @@ export const useGameStore = create<GameState>((set, get) => ({
   secretMovie: null,
   lastCharadesRoundEnd: null,
   incorrectFeedbackTrigger: 0,
+  imposterState: null,
+  imposterSecret: null,
+  hasVotedImposter: false,
   toasts: [],
 
   setMyId:      (id) => set({ myId: id }),
@@ -119,6 +132,9 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   setCharadesState: (s) => set({ charadesState: s }),
   setSecretMovie: (m) => set({ secretMovie: m }),
+  setImposterState: (s) => set({ imposterState: s }),
+  setImposterSecret: (s) => set({ imposterSecret: s }),
+  setHasVotedImposter: (v) => set({ hasVotedImposter: v }),
   handleCharadesRoundEnd: (p) => {
     set({ lastCharadesRoundEnd: p, secretMovie: null });
     const teamName = p.pointsAwardedTo === 'A'
@@ -144,7 +160,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     room: null, secretWord: null, secretManglish: null, secretCategory: null,
     timerRemaining: 0, lastAward: null, roundEndWord: null,
     leaderboard: [], charadesState: null, secretMovie: null,
-    lastCharadesRoundEnd: null, toasts: [],
+    lastCharadesRoundEnd: null, imposterState: null, imposterSecret: null,
+    hasVotedImposter: false, toasts: [],
   }),
 }));
 

@@ -1,6 +1,6 @@
 // ─── Game Platform ──────────────────────────────────────────────────────────
 
-export type GameType = 'pictionary' | 'charades';
+export type GameType = 'pictionary' | 'charades' | 'imposter';
 
 // ─── Players ────────────────────────────────────────────────────────────────
 
@@ -29,16 +29,18 @@ export interface RoomSettings {
 
 export interface Room {
   code: string;
-  gameType: GameType;             // 'pictionary' (default) or 'charades'
+  gameType: GameType;             // 'pictionary', 'charades', or 'imposter'
   phase: GamePhase;
   players: Player[];
   settings: RoomSettings;
   charadesSettings?: CharadesSettings;
+  imposterSettings?: ImposterSettings;
   currentRound: number;
   currentDrawerId: string | null;
   currentWord: string | null;       // only sent to drawer
   currentCategory?: string;         // public category hint (e.g. 🎬 സിനിമ, 🍲 ഭക്ഷണം)
   charadesState?: CharadesPublicState;
+  imposterState?: ImposterPublicState;
 }
 
 // ─── Dumb Charades Types ────────────────────────────────────────────────────
@@ -108,6 +110,95 @@ export interface SecretMoviePayload {
   difficulty: string;
 }
 
+// ─── The Imposter Types ──────────────────────────────────────────────────────
+
+export type ImposterCategory =
+  | 'cinema'        // 🎬 സിനിമ (Malayalam Cinema)
+  | 'celebrities'   // 🌟 താരങ്ങൾ (Malayalam Celebrities)
+  | 'kerala'        // 🌴 കേരളം (Traditions & Culture)
+  | 'food'          // 🍲 ഭക്ഷണം (Kerala Food)
+  | 'places'        // 📍 സ്ഥലങ്ങൾ (Kerala Places)
+  | 'objects'       // 📦 നിത്യോപയോഗ വസ്തുക്കൾ (Everyday Objects)
+  | 'mixed';        // 🎲 എല്ലാം ചേർന്നത് (Mixed)
+
+export const IMPOSTER_CATEGORY_LABELS: Record<ImposterCategory, string> = {
+  mixed: '🎲 എല്ലാം ചേർന്നത് / Mixed Categories',
+  cinema: '🎬 സിനിമ / Malayalam Cinema',
+  celebrities: '🌟 താരങ്ങൾ / Celebrities',
+  kerala: '🌴 കേരള സംസ്കാരം / Kerala Traditions',
+  food: '🍲 ഭക്ഷണം / Kerala Food',
+  places: '📍 സ്ഥലങ്ങൾ / Kerala Places',
+  objects: '📦 നിത്യോപയോഗ വസ്തുക്കൾ / Everyday Objects',
+};
+
+export type ImposterDifficulty = 'easy' | 'medium' | 'hard' | 'mixed';
+
+export interface ImposterSettings {
+  totalRounds: number;            // 3 | 5 | 7 | 10 (default 5)
+  imposterCount: number;          // 1 | 2 (default 1)
+  difficulty: ImposterDifficulty; // default 'mixed'
+  category: ImposterCategory;     // default 'mixed'
+  discussionDurationSeconds: number; // 30 | 60 | 90 (default 60)
+  votingDurationSeconds: number;     // 20 | 30 (default 30)
+}
+
+export type ImposterRoundPhase =
+  | 'role-reveal'   // players review their secret role / word on phone
+  | 'clues'         // turn-by-turn verbal clue giving
+  | 'discussion'    // verbal discussion countdown
+  | 'voting'        // private voting on phone
+  | 'tie-break'     // second vote if top candidates tied
+  | 'imposter-guess'// caught imposter's final chance to guess the secret word
+  | 'round-end'     // outcome reveal, role reveals, score updates
+  | 'game-end';     // final podium
+
+export interface ImposterPublicState {
+  currentRound: number;
+  totalRounds: number;
+  roundPhase: ImposterRoundPhase;
+  category: string;               // e.g. "🎬 സിനിമ / Malayalam Cinema"
+  categoryKey: ImposterCategory;
+  clueOrder: string[];            // player IDs in turn order
+  currentCluePlayerId: string | null;
+  currentCluePlayerName: string | null;
+  clueTurnIndex: number;          // 0..clueOrder.length - 1
+  votedPlayerIds: string[];       // who has cast their vote (for count display, NOT selections)
+  tiedCandidateIds?: string[];    // candidate IDs during tie-break vote
+  eliminatedPlayerId?: string | null;
+  eliminatedPlayerName?: string | null;
+  eliminatedPlayerWasImposter?: boolean;
+  caughtImposterId?: string | null;
+  caughtImposterName?: string | null;
+  imposterFinalGuess?: string | null;
+  imposterGuessCorrect?: boolean | null;
+  revealedWord?: {
+    word: string;
+    manglish: string;
+    category: string;
+  } | null;                       // ONLY revealed when round ends!
+  imposterIds?: string[];         // ONLY revealed when round ends!
+  roundResult?: {
+    winner: 'normal' | 'imposter';
+    reason: string;
+    eliminatedPlayerName: string;
+    wasImposter: boolean;
+    imposterGuess?: {
+      guess: string;
+      correct: boolean;
+    };
+    pointsAwarded: Record<string, number>; // playerId -> points earned this round
+  } | null;
+}
+
+export interface ImposterSecretPayload {
+  isImposter: boolean;
+  secretWord?: string;            // undefined for imposter!
+  secretManglish?: string;        // undefined for imposter!
+  category: string;
+  categoryKey: ImposterCategory;
+  otherImposters?: string[];      // names of fellow imposters if imposterCount > 1
+}
+
 // ─── Socket.IO Events (Client → Server) ─────────────────────────────────────
 
 export interface ClientToServerEvents {
@@ -139,6 +230,17 @@ export interface ClientToServerEvents {
   'charades:request-switch-team': (payload: { targetTeam: 'A' | 'B' }) => void;
   'charades:respond-switch-team': (payload: { requestId: string; approve: boolean }) => void;
   'charades:cancel-switch-team': () => void;
+
+  // ── Imposter Events ──
+  'imposter:update-settings': (payload: Partial<ImposterSettings>) => void; // host only
+  'imposter:start-game': () => void; // host only
+  'imposter:start-clues': () => void; // host or player confirming readiness
+  'imposter:next-clue': () => void; // active clue giver or host
+  'imposter:end-discussion': () => void; // host only
+  'imposter:vote': (payload: { candidateId: string }) => void; // player votes
+  'imposter:submit-word-guess': (payload: { guess: string }) => void; // caught imposter guesses word
+  'imposter:next-round': () => void; // host advances round
+  'imposter:restart-game': () => void; // host restarts
 }
 
 // ─── Socket.IO Events (Server → Client) ─────────────────────────────────────
@@ -172,6 +274,11 @@ export interface ServerToClientEvents {
     teamAScore: number;
     teamBScore: number;
   }) => void;
+
+  // Imposter (strictly filtered server-side)
+  'imposter:state': (state: ImposterPublicState) => void;
+  'imposter:secret': (payload: ImposterSecretPayload) => void; // Delivered ONLY to specific player privately!
+  'imposter:vote-registered': () => void;
 }
 
 // ─── Public room state (word hidden) ────────────────────────────────────────

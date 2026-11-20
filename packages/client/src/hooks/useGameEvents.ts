@@ -28,7 +28,7 @@ export function useGameEvents() {
     socket.on('room:error',    (msg) => store.addToast(`⚠️ ${msg}`, 'error'));
 
     socket.on('game:started',  (room) => {
-      store.setRoom(room);
+      store.handleGameStarted(room);
       // Navigate based on role
       const me = room.players.find(p => p.id === socket.id);
       if (me?.isHost) return;           // TV stays on /tv
@@ -45,7 +45,10 @@ export function useGameEvents() {
 
     socket.on('game:end',      (payload) => {
       store.handleGameEnd(payload);
-      navigate('/leaderboard');
+      const me = store.room?.players.find(p => p.id === socket.id);
+      if (!me?.isHost) {
+        navigate('/leaderboard');
+      }
     });
 
     // If already connected when this effect runs

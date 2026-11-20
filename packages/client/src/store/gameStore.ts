@@ -30,6 +30,7 @@ interface GameState {
   setMyId:      (id: string) => void;
   setConnected: (v: boolean) => void;
   setRoom:      (room: RoomPublicState) => void;
+  handleGameStarted: (room: RoomPublicState) => void;
   setSecretWord:(word: string, manglish: string) => void;
   setTimer:     (remaining: number) => void;
   handleAward:  (p: { winnerId: string; winnerName: string; points: number }) => void;
@@ -55,6 +56,12 @@ export const useGameStore = create<GameState>((set, get) => ({
   setMyId:      (id) => set({ myId: id }),
   setConnected: (v)  => set({ connected: v }),
   setRoom:      (room) => set({ room }),
+
+  handleGameStarted: (room) => set({
+    room,
+    roundEndWord: null,
+    lastAward: null,
+  }),
 
   setSecretWord: (word, manglish) =>
     set({ secretWord: word, secretManglish: manglish }),

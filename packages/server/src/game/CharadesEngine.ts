@@ -5,6 +5,7 @@ import type {
   CharadesPublicState,
   MovieReveal,
   SecretMoviePayload,
+  TeamSwitchRequest,
 } from '@chitram/shared';
 import type { GameServer } from '../socket/index';
 import { MovieSelector, type CharadesMovie } from './CharadesMovieBank';
@@ -68,6 +69,75 @@ export class CharadesEngine {
     this.broadcastState();
   }
 
+  requestSwitchTeam(playerId: string, targetTeam: 'A' | 'B') {
+    const player = this.room.players.find(p => p.id === playerId);
+    if (!player) return;
+    if (player.team === targetTeam) return;
+
+    const state = this.room.charadesState;
+    if (!state) return;
+
+    // If teams are not locked yet (lobby/setup phase), allow instant switch
+    if (!state.teamsLocked) {
+      this.setPlayerTeam(playerId, targetTeam);
+      this.broadcastRoom();
+      return;
+    }
+
+    // Teams are locked and game is in progress:
+    // Create switch request requiring approval from the opposite/target team members
+    state.pendingSwitchRequest = {
+      id: Math.random().toString(36).substring(2, 9),
+      playerId,
+      playerName: player.name,
+      fromTeam: player.team ?? null,
+      toTeam: targetTeam,
+      timestamp: Date.now(),
+    };
+
+    this.broadcastState();
+  }
+
+  respondSwitchTeam(responderId: string, requestId: string, approve: boolean) {
+    const state = this.room.charadesState;
+    if (!state?.pendingSwitchRequest || state.pendingSwitchRequest.id !== requestId) return;
+
+    const responder = this.room.players.find(p => p.id === responderId);
+    if (!responder) return;
+
+    // Requester cannot approve their own switch!
+    if (responder.id === state.pendingSwitchRequest.playerId) return;
+
+    // Must be either a member of the opposite/target team, or the host
+    const isTargetTeam = responder.team === state.pendingSwitchRequest.toTeam;
+    if (!isTargetTeam && !responder.isHost) return;
+
+    const req = state.pendingSwitchRequest;
+    state.pendingSwitchRequest = null;
+
+    if (approve) {
+      this.setPlayerTeam(req.playerId, req.toTeam);
+      this.broadcastRoom();
+    } else {
+      this.io.to(req.playerId).emit('room:error', 'Your team switch request was rejected by the opposite team.');
+      this.broadcastState();
+    }
+  }
+
+  cancelSwitchTeam(playerId: string) {
+    const state = this.room.charadesState;
+    if (state?.pendingSwitchRequest?.playerId === playerId) {
+      state.pendingSwitchRequest = null;
+      this.broadcastState();
+    }
+  }
+
+  broadcastRoom() {
+    const pub: any = { ...this.room };
+    delete pub.currentWord;
+    this.io.to(this.room.code).emit('room:updated', pub);
+  }
+
   recalculateTurns() {
     const teamAMembers = this.room.players.filter(p => !p.isHost && p.team === 'A');
     const teamBMembers = this.room.players.filter(p => !p.isHost && p.team === 'B');
@@ -126,6 +196,11 @@ export class CharadesEngine {
     if (this.actedPlayerIdsTeamB.has(oldSocketId)) {
       this.actedPlayerIdsTeamB.delete(oldSocketId);
       this.actedPlayerIdsTeamB.add(newSocketId);
+    }
+
+    // 4. Update pending switch request if it belonged to reconnecting player
+    if (state.pendingSwitchRequest?.playerId === oldSocketId) {
+      state.pendingSwitchRequest.playerId = newSocketId;
     }
 
     this.recalculateTurns();
@@ -203,6 +278,7 @@ export class CharadesEngine {
       revealedMovie: null,
       lastRoundResult: null,
       teamsLocked: false,
+      pendingSwitchRequest: null,
     };
   }
 

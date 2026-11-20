@@ -470,6 +470,37 @@ export default function CharadesTVScreen({ hostIP }: Props) {
         </div>
       </div>
 
+      {/* ── Pending Team Switch Banner on TV ─────────────────────────────────── */}
+      {charadesState.pendingSwitchRequest && (
+        <div className="bg-amber-950/80 border-b border-amber-400/50 px-10 py-2.5 flex items-center justify-between text-xs font-bold text-amber-200 shrink-0 animate-pulse">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">👥</span>
+            <span>
+              <strong>{charadesState.pendingSwitchRequest.playerName}</strong> requested to switch to{' '}
+              <span className="text-white underline">
+                {charadesState.pendingSwitchRequest.toTeam === 'A' ? charadesState.teamAName : charadesState.teamBName}
+              </span>
+              {' '}(Waiting for opposite team approval on phone)
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-white/40 text-[11px] mr-1">Host override:</span>
+            <button
+              onClick={() => getSocket().emit('charades:respond-switch-team', { requestId: charadesState.pendingSwitchRequest!.id, approve: true })}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-3 py-1 rounded-lg font-bold"
+            >
+              Approve
+            </button>
+            <button
+              onClick={() => getSocket().emit('charades:respond-switch-team', { requestId: charadesState.pendingSwitchRequest!.id, approve: false })}
+              className="bg-red-600 hover:bg-red-500 text-white text-xs px-3 py-1 rounded-lg font-bold"
+            >
+              Reject
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Scoreboard Banner ──────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 divide-x divide-white/10 border-b border-white/10 bg-white/5 shrink-0">
         {/* Team A */}

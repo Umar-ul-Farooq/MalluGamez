@@ -69,6 +69,15 @@ export interface MovieReveal {
   difficulty: string;
 }
 
+export interface TeamSwitchRequest {
+  id: string;
+  playerId: string;
+  playerName: string;
+  fromTeam: 'A' | 'B' | null;
+  toTeam: 'A' | 'B';
+  timestamp: number;
+}
+
 export interface CharadesPublicState {
   teamAName: string;
   teamBName: string;
@@ -89,6 +98,7 @@ export interface CharadesPublicState {
     points: number;
   } | null;
   teamsLocked: boolean;
+  pendingSwitchRequest?: TeamSwitchRequest | null;
 }
 
 export interface SecretMoviePayload {
@@ -126,6 +136,9 @@ export interface ClientToServerEvents {
   'charades:change-actor': () => void; // host rerolls actor if current actor left/disconnected
   'charades:adjust-score': (payload: { team: 'A' | 'B'; delta: number }) => void; // host score correction
   'charades:restart-game': () => void; // host restarts with same teams
+  'charades:request-switch-team': (payload: { targetTeam: 'A' | 'B' }) => void;
+  'charades:respond-switch-team': (payload: { requestId: string; approve: boolean }) => void;
+  'charades:cancel-switch-team': () => void;
 }
 
 // ─── Socket.IO Events (Server → Client) ─────────────────────────────────────

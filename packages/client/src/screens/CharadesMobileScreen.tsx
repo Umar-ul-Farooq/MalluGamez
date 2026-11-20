@@ -32,7 +32,15 @@ export default function CharadesMobileScreen() {
   const totalSecs = room.charadesSettings?.roundDurationSeconds ?? 90;
 
   function handleSelectTeam(team: 'A' | 'B') {
-    getSocket().emit('charades:select-team', { team });
+    if (charadesState?.teamsLocked) {
+      if (team === myTeam) {
+        setShowTeamSelect(false);
+        return;
+      }
+      getSocket().emit('charades:request-switch-team', { targetTeam: team });
+    } else {
+      getSocket().emit('charades:select-team', { team });
+    }
     setShowTeamSelect(false);
   }
 
@@ -72,6 +80,12 @@ export default function CharadesMobileScreen() {
           <p className="text-white/60 text-xs uppercase tracking-widest font-bold text-center">
             Tap a team to join
           </p>
+
+          {charadesState?.teamsLocked && (
+            <p className="text-amber-300/80 text-[11px] text-center bg-amber-500/10 border border-amber-500/20 py-1.5 px-3 rounded-xl">
+              ℹ️ Switching teams mid-game requires approval from the opposite team to prevent cheating.
+            </p>
+          )}
 
           {/* Team A Button */}
           <button
@@ -204,10 +218,10 @@ export default function CharadesMobileScreen() {
             <span className="text-white/40 text-[10px] uppercase font-bold tracking-wider">Your Team</span>
             <button
               onClick={() => setShowTeamSelect(true)}
-              className="text-[10px] bg-white/10 hover:bg-white/20 text-amber-300 font-bold px-1.5 py-0.5 rounded transition"
+              className="text-[10px] bg-white/10 hover:bg-white/20 text-amber-300 font-bold px-2 py-0.5 rounded transition"
               title="Switch team / ടീം മാറ്റുക"
             >
-              🔄 Switch
+              🔄 Switch Team
             </button>
           </div>
           <p className={`font-black text-sm ${myTeam === 'A' ? 'text-blue-300' : 'text-amber-300'}`}>
@@ -226,6 +240,55 @@ export default function CharadesMobileScreen() {
           </p>
         </div>
       </div>
+
+      {/* ── Switch Request Pending Banner (For Requester) ──────────────────── */}
+      {charadesState?.pendingSwitchRequest?.playerId === myPlayer?.id && (
+        <div className="bg-amber-950/80 border border-amber-400/50 p-3 rounded-2xl text-center space-y-1.5 animate-pulse my-2 shrink-0">
+          <p className="text-amber-200 text-xs font-bold">
+            ⏳ Waiting for {charadesState.pendingSwitchRequest.toTeam === 'A' ? teamAName : teamBName} to approve your team switch…
+          </p>
+          <button
+            onClick={() => getSocket().emit('charades:cancel-switch-team')}
+            className="text-[11px] bg-white/10 hover:bg-white/20 text-white/80 px-3 py-0.5 rounded-full"
+          >
+            Cancel Request
+          </button>
+        </div>
+      )}
+
+      {/* ── Switch Approval Prompt (For Opposite Team Members) ─────────────── */}
+      {charadesState?.pendingSwitchRequest &&
+        charadesState.pendingSwitchRequest.toTeam === myTeam &&
+        charadesState.pendingSwitchRequest.playerId !== myPlayer?.id && (
+        <div className="bg-gradient-to-r from-purple-950/95 via-amber-950/95 to-purple-950/95 border-2 border-amber-400 p-4 rounded-2xl shadow-2xl space-y-2 my-2 animate-bounce-in shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">👥</span>
+            <div>
+              <h4 className="text-amber-300 font-black text-sm">Team Switch Request / ടീം മാറ്റം</h4>
+              <p className="text-white text-xs">
+                <span className="font-bold text-amber-200">{charadesState.pendingSwitchRequest.playerName}</span> wants to join your team ({myTeam === 'A' ? teamAName : teamBName}).
+              </p>
+            </div>
+          </div>
+          <p className="text-white/60 text-[10px]">
+            (Opposite team approval required to ensure fair play)
+          </p>
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <button
+              onClick={() => getSocket().emit('charades:respond-switch-team', { requestId: charadesState.pendingSwitchRequest!.id, approve: true })}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs py-2 rounded-xl shadow"
+            >
+              ✅ Approve / സമ്മതം
+            </button>
+            <button
+              onClick={() => getSocket().emit('charades:respond-switch-team', { requestId: charadesState.pendingSwitchRequest!.id, approve: false })}
+              className="bg-red-600 hover:bg-red-500 text-white font-black text-xs py-2 rounded-xl shadow"
+            >
+              ❌ Reject / വേണ്ട
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── ROUND-END OVERLAY FOR MOBILE ───────────────────────────────────── */}
       {charadesState?.roundPhase === 'round-end' && charadesState.revealedMovie && (

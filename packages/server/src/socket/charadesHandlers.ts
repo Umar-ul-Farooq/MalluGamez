@@ -14,10 +14,55 @@ export function registerCharadesHandlers(io: GameServer, socket: GameSocket, rm:
       if (!room || room.gameType !== 'charades') return;
 
       const engine = rm.ensureCharadesEngine(room.code, io);
-      engine.setPlayerTeam(socket.id, team);
+      if (room.charadesState?.teamsLocked) {
+        engine.requestSwitchTeam(socket.id, team);
+      } else {
+        engine.setPlayerTeam(socket.id, team);
+        io.to(room.code).emit('room:updated', rm.publicState(room.code));
+      }
+    } catch (err: any) {
+      socket.emit('room:error', err.message);
+    }
+  });
 
-      io.to(room.code).emit('room:updated', rm.publicState(room.code));
-      io.to(room.code).emit('charades:state', engine.getPublicState());
+  // Player requests team switch during active game (requires opposite team approval)
+  socket.on('charades:request-switch-team', ({ targetTeam }) => {
+    try {
+      const room = rm.getRoomByPlayer(socket.id);
+      if (!room || room.gameType !== 'charades') return;
+
+      const engine = rm.ensureCharadesEngine(room.code, io);
+      engine.requestSwitchTeam(socket.id, targetTeam);
+    } catch (err: any) {
+      socket.emit('room:error', err.message);
+    }
+  });
+
+  // Member of opposite team (or host) approves/rejects team switch
+  socket.on('charades:respond-switch-team', ({ requestId, approve }) => {
+    try {
+      const room = rm.getRoomByPlayer(socket.id);
+      if (!room || room.gameType !== 'charades') return;
+
+      const engine = rm.getCharadesEngine(room.code);
+      if (!engine) return;
+
+      engine.respondSwitchTeam(socket.id, requestId, approve);
+    } catch (err: any) {
+      socket.emit('room:error', err.message);
+    }
+  });
+
+  // Requester cancels their team switch request
+  socket.on('charades:cancel-switch-team', () => {
+    try {
+      const room = rm.getRoomByPlayer(socket.id);
+      if (!room || room.gameType !== 'charades') return;
+
+      const engine = rm.getCharadesEngine(room.code);
+      if (!engine) return;
+
+      engine.cancelSwitchTeam(socket.id);
     } catch (err: any) {
       socket.emit('room:error', err.message);
     }

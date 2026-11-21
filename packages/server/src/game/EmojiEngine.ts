@@ -5,12 +5,12 @@ import type {
   EmojiPublicState,
   EmojiPlayerAnswer,
   EmojiRoundPhase,
+  EmojiMovieItem,
 } from '@chitram/shared';
 import {
   EMOJI_MOVIES,
   validateMovieAnswer,
-  type EmojiMovieItem,
-} from '@chitram/shared';
+} from '../../../shared/src/emojiMovieBank';
 import type { GameServer } from '../socket/index';
 
 export class EmojiEngine {

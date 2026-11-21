@@ -1,4 +1,14 @@
-import { type ImposterCategory, type ImposterDifficulty, IMPOSTER_CATEGORY_LABELS } from '@chitram/shared';
+import type { ImposterCategory, ImposterDifficulty } from '@chitram/shared';
+
+export const IMPOSTER_CATEGORY_LABELS: Record<ImposterCategory, string> = {
+  mixed: '🎲 എല്ലാം ചേർന്നത് / Mixed Categories',
+  cinema: '🎬 സിനിമ / Malayalam Cinema',
+  celebrities: '🌟 താരങ്ങൾ / Celebrities',
+  kerala: '🌴 കേരള സംസ്കാരം / Kerala Traditions',
+  food: '🍲 ഭക്ഷണം / Kerala Food',
+  places: '📍 സ്ഥലങ്ങൾ / Kerala Places',
+  objects: '📦 നിത്യോപയോഗ വസ്തുക്കൾ / Everyday Objects',
+};
 
 export interface ImposterWord {
   id: string;

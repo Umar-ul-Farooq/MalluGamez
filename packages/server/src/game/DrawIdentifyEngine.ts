@@ -438,6 +438,17 @@ export class DrawIdentifyEngine {
     if (this.currentDrawerId === oldSocketId) {
       this.currentDrawerId = newSocketId;
     }
+    // Update rotation queue
+    const qIdx = this.drawerRotationQueue.indexOf(oldSocketId);
+    if (qIdx !== -1) {
+      this.drawerRotationQueue[qIdx] = newSocketId;
+    }
+    // Update identifiedByPlayerId in objectList
+    for (const item of this.objectList) {
+      if (item.identifiedByPlayerId === oldSocketId) {
+        item.identifiedByPlayerId = newSocketId;
+      }
+    }
     // Send state and secret list if opposing player
     this.io.to(newSocketId).emit('draw-identify:state', this.getPublicState());
     if (newSocketId !== this.currentDrawerId) {

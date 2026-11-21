@@ -156,6 +156,12 @@ export class RoomManager {
         this.disconnectTimeouts.delete(timeoutKey);
       }
 
+      // Notify Pictionary engine of reconnection
+      const pictionaryEngine = this.engines.get(code);
+      if (pictionaryEngine) {
+        pictionaryEngine.handlePlayerReconnect(oldSocketId, socketId, existingPlayer);
+      }
+
       // Notify Charades engine of reconnection
       const charadesEngine = this.charadesEngines.get(code);
       if (charadesEngine) {

@@ -312,11 +312,19 @@ export class EmojiEngine {
       this.correctPlayerIds[cIdx] = newSocketId;
     }
 
-    if (this.room.emojiState?.currentTurnPlayerId === oldSocketId) {
-      this.room.emojiState.currentTurnPlayerId = newSocketId;
+    if (this.room.emojiState) {
+      if (this.room.emojiState.currentTurnPlayerId === oldSocketId) {
+        this.room.emojiState.currentTurnPlayerId = newSocketId;
+      }
+      this.room.emojiState.answeredPlayerIds = Array.from(this.answeredPlayerIds);
+      this.room.emojiState.correctPlayerIds = [...this.correctPlayerIds];
     }
 
     this.broadcastState();
+  }
+
+  stop() {
+    this.destroy();
   }
 
   destroy() {

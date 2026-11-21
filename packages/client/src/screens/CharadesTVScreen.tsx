@@ -27,6 +27,8 @@ export default function CharadesTVScreen({ hostIP }: Props) {
   const [editingTeamB, setEditingTeamB] = useState(false);
   const [teamANameInput, setTeamANameInput] = useState('');
   const [teamBNameInput, setTeamBNameInput] = useState('');
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   if (!room) return null;
 
@@ -55,12 +57,85 @@ export default function CharadesTVScreen({ hostIP }: Props) {
     getSocket().emit('charades:lock-teams');
   }
 
-  function handleHome() {
+  function confirmExit() {
     getSocket().emit('room:terminate');
     sessionStorage.removeItem('chitram_tv_host');
     useGameStore.getState().reset();
+    setShowExitConfirm(false);
     navigate('/');
   }
+
+  function confirmForceReset() {
+    getSocket().emit('room:force-reset');
+    sessionStorage.removeItem('chitram_tv_host');
+    useGameStore.getState().reset();
+    setShowResetConfirm(false);
+    navigate('/');
+  }
+
+  const renderModals = () => (
+    <>
+      {showExitConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-[#1a0f1e] border-2 border-white/20 rounded-3xl p-8 max-w-lg w-full text-center shadow-2xl space-y-5">
+            <div className="text-5xl">🚪</div>
+            <div>
+              <h3 className="text-2xl font-black text-white">Exit Game?</h3>
+              <p className="text-red-400 font-bold mt-1">കളി അവസാനിപ്പിക്കണോ?</p>
+            </div>
+            <p className="text-white/70 text-sm leading-relaxed">
+              This will end the game session for all connected players and return everyone to the home screen.
+            </p>
+            <div className="flex gap-4 pt-2">
+              <button
+                onClick={() => setShowExitConfirm(false)}
+                className="flex-1 py-3 text-sm font-bold bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all"
+              >
+                Cancel / വേണ്ട
+              </button>
+              <button
+                onClick={confirmExit}
+                className="flex-1 py-3 text-sm font-black bg-red-600 hover:bg-red-500 text-white rounded-xl shadow-lg transition-all"
+              >
+                Yes, Exit Game
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-[#1a0f1e] border-2 border-red-500/50 rounded-3xl p-8 max-w-lg w-full text-center shadow-2xl space-y-5">
+            <div className="text-5xl">⚠️</div>
+            <div>
+              <h3 className="text-2xl font-black text-white">Force Reset This Room?</h3>
+              <p className="text-red-400 font-bold mt-1">ഈ റൂം പൂർണ്ണമായി റീസെറ്റ് ചെയ്യണോ?</p>
+            </div>
+            <div className="bg-red-950/40 border border-red-500/30 rounded-2xl p-4 text-left text-xs text-white/80 space-y-2">
+              <p className="font-semibold text-white">
+                Force reset this room? All connected players will be removed from the current game session, and the TV and mobile screens will return to a clean state.
+              </p>
+            </div>
+            <div className="flex gap-4 pt-2">
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                className="flex-1 py-3 text-sm font-bold bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmForceReset}
+                className="flex-1 py-3 text-sm font-black bg-red-600 hover:bg-red-500 text-white rounded-xl shadow-lg shadow-red-900/50 transition-all"
+              >
+                Force Reset
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
 
   function handleStartActing() {
     getSocket().emit('charades:start-acting');
@@ -110,11 +185,12 @@ export default function CharadesTVScreen({ hostIP }: Props) {
 
     return (
       <div className="h-full flex flex-col bg-gradient-to-br from-gray-950 via-purple-950/30 to-gray-950 overflow-hidden select-none">
+        {renderModals()}
         {/* Top bar */}
         <div className="flex items-center justify-between px-10 pt-6 pb-3 shrink-0">
           <div className="flex items-center gap-5">
             <button
-              onClick={handleHome}
+              onClick={() => setShowExitConfirm(true)}
               className="btn-secondary text-sm py-2 px-4 flex items-center gap-2 hover:bg-white/20 transition-all font-semibold"
             >
               ← Home / പ്രധാന പേജ്
@@ -136,6 +212,14 @@ export default function CharadesTVScreen({ hostIP }: Props) {
             <div className="bg-amber-500/20 border border-amber-400/40 px-4 py-1.5 rounded-xl font-mono font-bold text-amber-300 text-lg">
               Room: {room.code}
             </div>
+            <button
+              onClick={() => setShowResetConfirm(true)}
+              className="text-[11px] text-white/30 hover:text-red-400 hover:bg-red-950/30 border border-white/10 hover:border-red-500/40 px-2.5 py-1.5 rounded-lg transition-all font-semibold flex items-center gap-1.5"
+              title="Force Reset this session"
+            >
+              <span>🔄</span>
+              <span>Reset</span>
+            </button>
           </div>
         </div>
 
@@ -397,6 +481,7 @@ export default function CharadesTVScreen({ hostIP }: Props) {
 
     return (
       <div className="h-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-950 via-purple-950 to-gray-950 p-10 select-none overflow-hidden">
+        {renderModals()}
         <div className="text-center mb-8 animate-bounce-in">
           <div className="text-8xl mb-3">🏆</div>
           <h1 className="text-5xl font-black text-white">Game Over!</h1>
@@ -421,9 +506,9 @@ export default function CharadesTVScreen({ hostIP }: Props) {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex gap-4">
+        <div className="flex items-center gap-4">
           <button
-            onClick={handleHome}
+            onClick={() => setShowExitConfirm(true)}
             className="btn-secondary text-lg py-3 px-8"
           >
             🏠 Home / പ്രധാന പേജ്
@@ -433,6 +518,13 @@ export default function CharadesTVScreen({ hostIP }: Props) {
             className="btn-primary bg-amber-500 hover:bg-amber-600 text-gray-950 font-black text-lg py-3 px-10 shadow-lg"
           >
             🔄 Rematch / വീണ്ടും കളിക്കാം
+          </button>
+          <button
+            onClick={() => setShowResetConfirm(true)}
+            className="opacity-40 hover:opacity-100 text-sm text-white/50 hover:text-red-400 border border-white/10 hover:border-red-500/30 px-3 py-3 rounded-2xl transition-all"
+            title="Force Reset"
+          >
+            🔄 Reset
           </button>
         </div>
       </div>
@@ -450,12 +542,13 @@ export default function CharadesTVScreen({ hostIP }: Props) {
 
   return (
     <div className="h-full flex flex-col bg-gray-950 select-none overflow-hidden">
+      {renderModals()}
 
       {/* ── Top Header Bar ─────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-10 py-3 border-b border-white/10 shrink-0 bg-gray-900/70 backdrop-blur-md">
         <div className="flex items-center gap-4">
           <button
-            onClick={handleHome}
+            onClick={() => setShowExitConfirm(true)}
             className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1 text-white/70 hover:text-white"
           >
             ← Exit
@@ -475,9 +568,18 @@ export default function CharadesTVScreen({ hostIP }: Props) {
           <Timer remaining={timerRemaining} total={totalSecs} large />
         </div>
 
-        {/* Right: Room code */}
-        <div className="bg-amber-500/20 border border-amber-500/40 px-3 py-1 rounded-xl font-mono font-bold text-amber-300 text-sm">
-          {room.code}
+        {/* Right: Room code & Force Reset */}
+        <div className="flex items-center gap-3">
+          <div className="bg-amber-500/20 border border-amber-500/40 px-3 py-1 rounded-xl font-mono font-bold text-amber-300 text-sm">
+            {room.code}
+          </div>
+          <button
+            onClick={() => setShowResetConfirm(true)}
+            title="Discreet Force Reset"
+            className="opacity-30 hover:opacity-100 text-xs text-white/50 hover:text-red-400 border border-white/10 hover:border-red-500/30 px-2 py-1 rounded transition-all"
+          >
+            🔄
+          </button>
         </div>
       </div>
 

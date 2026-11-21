@@ -12,6 +12,7 @@ import { MovieSelector, type CharadesMovie } from './CharadesMovieBank';
 
 export class CharadesEngine {
   private timer: NodeJS.Timeout | null = null;
+  private autoAdvanceTimer: NodeJS.Timeout | null = null;
   private remainingSeconds = 0;
   private currentMovie: CharadesMovie | null = null;
   private movieSelector = new MovieSelector();
@@ -395,6 +396,13 @@ export class CharadesEngine {
     }
   }
 
+  private stopAutoAdvanceTimer() {
+    if (this.autoAdvanceTimer) {
+      clearTimeout(this.autoAdvanceTimer);
+      this.autoAdvanceTimer = null;
+    }
+  }
+
   // ─── Judging & Scoring ────────────────────────────────────────────────────
 
   handleJudgeAction(socketId: string, isCorrect: boolean) {
@@ -478,12 +486,13 @@ export class CharadesEngine {
       teamBScore: state.teamBScore,
     });
 
+    this.stopAutoAdvanceTimer();
     // Check if total rounds completed
     if (state.currentRoundNumber >= state.totalRounds) {
-      setTimeout(() => this.endGame(), 4500);
+      this.autoAdvanceTimer = setTimeout(() => this.endGame(), 4500);
     } else {
       // Auto-advance after 5.5 seconds
-      setTimeout(() => {
+      this.autoAdvanceTimer = setTimeout(() => {
         if (state.roundPhase === 'round-end') {
           this.startRoundCycle();
         }
@@ -493,6 +502,7 @@ export class CharadesEngine {
 
   // Host manual override/advance
   nextRound() {
+    this.stopAutoAdvanceTimer();
     const state = this.room.charadesState!;
     if (state.roundPhase !== 'round-end') return;
     if (state.currentRoundNumber >= state.totalRounds) {
@@ -516,6 +526,7 @@ export class CharadesEngine {
 
   private endGame() {
     this.stopTimer();
+    this.stopAutoAdvanceTimer();
     const state = this.room.charadesState!;
     state.roundPhase = 'game-end';
     this.room.phase = 'game-end';
@@ -523,11 +534,13 @@ export class CharadesEngine {
   }
 
   restartGame() {
+    this.stopAutoAdvanceTimer();
     this.startGame();
   }
 
   stop() {
     this.stopTimer();
+    this.stopAutoAdvanceTimer();
   }
 
   private broadcastState() {

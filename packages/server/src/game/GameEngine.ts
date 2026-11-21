@@ -1,10 +1,12 @@
-import type { Room } from '@chitram/shared';
+import type { Room, Player } from '@chitram/shared';
 import type { GameServer } from '../socket/index';
 import type { WordItem } from './WordBank';
 
 export class GameEngine {
   private timer: NodeJS.Timeout | null = null;
+  private roundEndTimer: NodeJS.Timeout | null = null;
   private drawerIndex = 0;
+  private currentWordItem: WordItem | null = null;
 
   constructor(
     private room: Room,
@@ -13,6 +15,7 @@ export class GameEngine {
   ) {}
 
   startNextRound() {
+    this.stopRoundEndTimer();
     this.room.currentRound += 1;
 
     if (this.room.currentRound > this.room.settings.totalRounds) {
@@ -33,6 +36,7 @@ export class GameEngine {
 
     // Pick a random word
     const word = this.wordBank[Math.floor(Math.random() * this.wordBank.length)];
+    this.currentWordItem = word;
     this.room.currentWord = word.malayalam;
     this.room.currentCategory = word.category;
 
@@ -51,6 +55,7 @@ export class GameEngine {
   }
 
   private startTimer() {
+    this.stopTimer();
     let remaining = this.room.settings.roundDurationSeconds;
     this.io.to(this.room.code).emit('timer:tick', { remaining });
 
@@ -64,13 +69,40 @@ export class GameEngine {
     }, 1000);
   }
 
-  endRound() {
-    if (this.room.phase === 'round-end' || this.room.phase === 'game-end') return;
-
+  private stopTimer() {
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
     }
+  }
+
+  private stopRoundEndTimer() {
+    if (this.roundEndTimer) {
+      clearTimeout(this.roundEndTimer);
+      this.roundEndTimer = null;
+    }
+  }
+
+  handlePlayerReconnect(oldSocketId: string, newSocketId: string, player: Player) {
+    if (this.room.currentDrawerId === oldSocketId) {
+      this.room.currentDrawerId = newSocketId;
+      player.isDrawing = true;
+
+      if (this.currentWordItem && this.room.phase === 'playing') {
+        this.io.to(newSocketId).emit('game:word', {
+          word: this.currentWordItem.malayalam,
+          manglish: this.currentWordItem.manglish,
+          category: this.currentWordItem.category,
+        });
+      }
+    }
+  }
+
+  endRound() {
+    if (this.room.phase === 'round-end' || this.room.phase === 'game-end') return;
+
+    this.stopTimer();
+    this.stopRoundEndTimer();
 
     this.room.phase = 'round-end';
     this.io.to(this.room.code).emit('round:end', {
@@ -79,7 +111,7 @@ export class GameEngine {
     });
 
     // Auto-advance to next round after 4 seconds
-    setTimeout(() => {
+    this.roundEndTimer = setTimeout(() => {
       if (this.room.phase === 'round-end') {
         this.room.phase = 'playing';
         this.startNextRound();
@@ -88,13 +120,16 @@ export class GameEngine {
   }
 
   private endGame() {
+    this.stopTimer();
+    this.stopRoundEndTimer();
     this.room.phase = 'game-end';
     const leaderboard = [...this.room.players].sort((a, b) => b.score - a.score);
     this.io.to(this.room.code).emit('game:end', { leaderboard });
   }
 
   stop() {
-    if (this.timer) clearInterval(this.timer);
+    this.stopTimer();
+    this.stopRoundEndTimer();
   }
 
   private publicState() {

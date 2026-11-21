@@ -22,6 +22,8 @@ export default function EmojiTVScreen({ hostIP }: Props) {
     difficulty: 'mixed',
     timerSeconds: 30,
   });
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   useEffect(() => {
     if (room?.emojiSettings) {
@@ -57,12 +59,85 @@ export default function EmojiTVScreen({ hostIP }: Props) {
     getSocket().emit('emoji:restart-game');
   }
 
-  function handleExit() {
+  function confirmExit() {
     getSocket().emit('room:terminate');
     sessionStorage.removeItem('chitram_tv_host');
     useGameStore.getState().reset();
+    setShowExitConfirm(false);
     navigate('/');
   }
+
+  function confirmForceReset() {
+    getSocket().emit('room:force-reset');
+    sessionStorage.removeItem('chitram_tv_host');
+    useGameStore.getState().reset();
+    setShowResetConfirm(false);
+    navigate('/');
+  }
+
+  const renderModals = () => (
+    <>
+      {showExitConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-[#1a0f1e] border-2 border-white/20 rounded-3xl p-8 max-w-lg w-full text-center shadow-2xl space-y-5">
+            <div className="text-5xl">🚪</div>
+            <div>
+              <h3 className="text-2xl font-black text-white">Exit Game?</h3>
+              <p className="text-red-400 font-bold mt-1">കളി അവസാനിപ്പിക്കണോ?</p>
+            </div>
+            <p className="text-white/70 text-sm leading-relaxed">
+              This will end the game session for all connected players and return everyone to the home screen.
+            </p>
+            <div className="flex gap-4 pt-2">
+              <button
+                onClick={() => setShowExitConfirm(false)}
+                className="flex-1 py-3 text-sm font-bold bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all"
+              >
+                Cancel / വേണ്ട
+              </button>
+              <button
+                onClick={confirmExit}
+                className="flex-1 py-3 text-sm font-black bg-red-600 hover:bg-red-500 text-white rounded-xl shadow-lg transition-all"
+              >
+                Yes, Exit Game
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-[#1a0f1e] border-2 border-red-500/50 rounded-3xl p-8 max-w-lg w-full text-center shadow-2xl space-y-5">
+            <div className="text-5xl">⚠️</div>
+            <div>
+              <h3 className="text-2xl font-black text-white">Force Reset This Room?</h3>
+              <p className="text-red-400 font-bold mt-1">ഈ റൂം പൂർണ്ണമായി റീസെറ്റ് ചെയ്യണോ?</p>
+            </div>
+            <div className="bg-red-950/40 border border-red-500/30 rounded-2xl p-4 text-left text-xs text-white/80 space-y-2">
+              <p className="font-semibold text-white">
+                Force reset this room? All connected players will be removed from the current game session, and the TV and mobile screens will return to a clean state.
+              </p>
+            </div>
+            <div className="flex gap-4 pt-2">
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                className="flex-1 py-3 text-sm font-bold bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmForceReset}
+                className="flex-1 py-3 text-sm font-black bg-red-600 hover:bg-red-500 text-white rounded-xl shadow-lg shadow-red-900/50 transition-all"
+              >
+                Force Reset
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
 
   // ────────────────────────────────────────────────────────────────────────────
   // PHASE 1: LOBBY
@@ -82,6 +157,7 @@ export default function EmojiTVScreen({ hostIP }: Props) {
 
     return (
       <div className="h-full flex flex-col bg-gradient-to-br from-gray-950 via-purple-950/40 to-gray-950 select-none overflow-hidden">
+        {renderModals()}
         {/* Top Header */}
         <div className="flex items-center justify-between px-10 py-5 border-b border-purple-500/20 bg-black/40 backdrop-blur-md">
           <div className="flex items-center gap-4">
@@ -99,12 +175,22 @@ export default function EmojiTVScreen({ hostIP }: Props) {
             </div>
           </div>
 
-          <button
-            onClick={handleExit}
-            className="text-white/40 hover:text-white text-xs font-semibold px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
-          >
-            ← Exit Game
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowExitConfirm(true)}
+              className="text-white/40 hover:text-white text-xs font-semibold px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
+            >
+              ← Exit Game
+            </button>
+            <button
+              onClick={() => setShowResetConfirm(true)}
+              className="text-[11px] text-white/30 hover:text-red-400 hover:bg-red-950/30 border border-white/10 hover:border-red-500/40 px-2.5 py-1.5 rounded-lg transition-all font-semibold flex items-center gap-1.5"
+              title="Force Reset this session"
+            >
+              <span>🔄</span>
+              <span>Reset</span>
+            </button>
+          </div>
         </div>
 
         {/* 3-Column Lobby Grid */}
@@ -296,6 +382,7 @@ export default function EmojiTVScreen({ hostIP }: Props) {
 
     return (
       <div className="h-full flex flex-col items-center justify-center p-8 bg-gradient-to-br from-gray-950 via-purple-950/40 to-gray-950 select-none">
+        {renderModals()}
         <div className="w-full max-w-2xl card border-2 border-amber-500/50 shadow-2xl p-8 text-center animate-fade-in">
           <span className="text-7xl mb-2 inline-block">🏆👑</span>
           <h1 className="text-4xl font-black text-white">Challenge Complete!</h1>
@@ -335,10 +422,17 @@ export default function EmojiTVScreen({ hostIP }: Props) {
               🔄 Play Again
             </button>
             <button
-              onClick={handleExit}
+              onClick={() => setShowExitConfirm(true)}
               className="btn-secondary py-4 px-8 text-base text-white/80 rounded-2xl"
             >
               🏠 Home
+            </button>
+            <button
+              onClick={() => setShowResetConfirm(true)}
+              className="opacity-40 hover:opacity-100 text-sm text-white/50 hover:text-red-400 border border-white/10 hover:border-red-500/30 px-3 py-4 rounded-2xl transition-all"
+              title="Force Reset"
+            >
+              🔄 Reset
             </button>
           </div>
         </div>
@@ -352,9 +446,16 @@ export default function EmojiTVScreen({ hostIP }: Props) {
 
   return (
     <div className="h-full flex flex-col justify-between bg-gradient-to-br from-gray-950 via-purple-950/40 to-gray-950 select-none p-8 overflow-hidden">
+      {renderModals()}
       {/* Top Header */}
       <div className="flex items-center justify-between pb-4 border-b border-purple-500/20">
         <div className="flex items-center gap-4">
+          <button
+            onClick={() => setShowExitConfirm(true)}
+            className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1 text-white/70 hover:text-white"
+          >
+            ← Exit
+          </button>
           <span className="text-3xl">🎬🍿</span>
           <div>
             <h2 className="text-xl font-black text-white">
@@ -374,7 +475,7 @@ export default function EmojiTVScreen({ hostIP }: Props) {
           </div>
         </div>
 
-        {/* Big Timer */}
+        {/* Big Timer, Room Code & Force Reset */}
         <div className="flex items-center gap-6">
           <div className="text-right">
             <span className="text-white/40 text-xs uppercase font-bold tracking-wider block">Time Left</span>
@@ -383,9 +484,18 @@ export default function EmojiTVScreen({ hostIP }: Props) {
             </span>
           </div>
 
-          <div className="bg-purple-950/60 border border-purple-500/30 rounded-2xl px-5 py-2 text-center">
-            <span className="text-white/40 text-[10px] uppercase font-bold tracking-widest block">Room Code</span>
-            <span className="text-2xl font-black text-white font-mono tracking-widest">{room.code}</span>
+          <div className="flex items-center gap-2">
+            <div className="bg-purple-950/60 border border-purple-500/30 rounded-2xl px-5 py-2 text-center">
+              <span className="text-white/40 text-[10px] uppercase font-bold tracking-widest block">Room Code</span>
+              <span className="text-2xl font-black text-white font-mono tracking-widest">{room.code}</span>
+            </div>
+            <button
+              onClick={() => setShowResetConfirm(true)}
+              title="Discreet Force Reset"
+              className="opacity-30 hover:opacity-100 text-xs text-white/50 hover:text-red-400 border border-white/10 hover:border-red-500/30 px-2 py-1 rounded transition-all"
+            >
+              🔄
+            </button>
           </div>
         </div>
       </div>

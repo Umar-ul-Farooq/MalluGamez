@@ -1,6 +1,6 @@
 // ─── Game Platform ──────────────────────────────────────────────────────────
 
-export type GameType = 'pictionary' | 'charades' | 'imposter' | 'emoji';
+export type GameType = 'pictionary' | 'charades' | 'imposter' | 'emoji' | 'draw-identify';
 
 // ─── Players ────────────────────────────────────────────────────────────────
 
@@ -29,13 +29,14 @@ export interface RoomSettings {
 
 export interface Room {
   code: string;
-  gameType: GameType;             // 'pictionary', 'charades', or 'imposter'
+  gameType: GameType;             // 'pictionary', 'charades', 'imposter', 'emoji', 'draw-identify'
   phase: GamePhase;
   players: Player[];
   settings: RoomSettings;
   charadesSettings?: CharadesSettings;
   imposterSettings?: ImposterSettings;
   emojiSettings?: EmojiSettings;
+  drawIdentifySettings?: DrawIdentifySettings;
   currentRound: number;
   currentDrawerId: string | null;
   currentWord: string | null;       // only sent to drawer
@@ -43,6 +44,7 @@ export interface Room {
   charadesState?: CharadesPublicState;
   imposterState?: ImposterPublicState;
   emojiState?: EmojiPublicState;
+  drawIdentifyState?: DrawIdentifyPublicState;
   sessionId?: string | null;
   hostToken?: string;
 }
@@ -245,6 +247,59 @@ export interface EmojiPublicState {
   roundAnswers?: EmojiPlayerAnswer[];
 }
 
+// ─── Draw & Identify Types ──────────────────────────────────────────────────
+
+export type DrawIdentifyLanguage = 'english' | 'malayalam';
+
+export interface DrawIdentifySettings {
+  objectCount: 6 | 9 | 12 | 15;
+  language: DrawIdentifyLanguage;
+  drawingDurationSeconds?: number;
+  identificationDurationSeconds: number;
+}
+
+export type DrawIdentifyPhase =
+  | 'drawing'        // drawer draws against clock (8/12/15/20s)
+  | 'identification' // opposing players call out & tick objects (60s)
+  | 'round-end'      // round summary & next round option
+  | 'game-end';      // final podium
+
+export interface SubmittedDrawing {
+  index: number; // 0-based grid index
+  dataUrl: string; // PNG base64
+  submittedAt: number;
+}
+
+export interface DrawIdentifyObjectItem {
+  index: number;
+  name: string;
+  englishName: string;
+  malayalamName: string;
+  isIdentified: boolean;
+  identifiedByPlayerId?: string | null;
+  identifiedByPlayerName?: string | null;
+  identifiedAt?: number | null;
+}
+
+export interface DrawIdentifyPublicState {
+  roundId: string;
+  currentRound: number;
+  totalRounds?: number;
+  currentDrawerId: string;
+  currentDrawerName: string;
+  roundPhase: DrawIdentifyPhase;
+  objectCount: 6 | 9 | 12 | 15;
+  language: DrawIdentifyLanguage;
+  drawingDurationSeconds: number;
+  identificationDurationSeconds: number;
+  drawings: (SubmittedDrawing | null)[];
+  submittedCount: number;
+  identifiedCount: number;
+  roundScore: number;
+  // NOTE: On TV and Drawer's phone, names are omitted/masked to ensure drawer never sees them!
+  objectList: DrawIdentifyObjectItem[];
+}
+
 // ─── Socket.IO Events (Client → Server) ─────────────────────────────────────
 
 export interface ClientToServerEvents {
@@ -298,6 +353,15 @@ export interface ClientToServerEvents {
   'emoji:reveal-hint': () => void; // host reveals hint early
   'emoji:next-question': () => void; // host advances question
   'emoji:restart-game': () => void; // host restarts game
+
+  // ── Draw & Identify Challenge Events ──
+  'draw-identify:update-settings': (payload: Partial<DrawIdentifySettings>) => void; // host only
+  'draw-identify:start-game': () => void; // host only
+  'draw-identify:submit-drawing': (payload: { roundId: string; drawingIndex: number; dataUrl: string }) => void; // drawer only
+  'draw-identify:tick-object': (payload: { roundId: string; objectIndex: number }) => void; // opposing players only
+  'draw-identify:next-round': () => void; // host only
+  'draw-identify:finish-game': () => void; // host only
+  'draw-identify:restart-game': () => void; // host only
 }
 
 // ─── Socket.IO Events (Server → Client) ─────────────────────────────────────
@@ -345,6 +409,12 @@ export interface ServerToClientEvents {
   // Emoji Movie Challenge
   'emoji:state': (state: EmojiPublicState) => void;
   'emoji:guess-result': (payload: { isCorrect: boolean; message: string; points?: number }) => void;
+
+  // Draw & Identify Challenge
+  'draw-identify:state': (state: DrawIdentifyPublicState) => void;
+  'draw-identify:secret-list': (payload: { roundId: string; objectList: DrawIdentifyObjectItem[] }) => void; // Opposing players only!
+  'draw-identify:object-ticked': (payload: { objectIndex: number; identifiedBy: string; identifiedCount: number }) => void;
+  'draw-identify:drawing-added': (drawing: SubmittedDrawing) => void;
 }
 
 // ─── Public room state (word hidden) ────────────────────────────────────────
@@ -365,5 +435,6 @@ export interface DrawStroke {
   type: 'stroke' | 'start';
 }
 
-// ─── Export Emoji Movie Bank & Validation ───────────────────────────────────
+// ─── Export Emoji & Draw Identify Banks ─────────────────────────────────────
 export * from './emojiMovieBank';
+export * from './drawIdentifyBank';

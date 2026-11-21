@@ -1,10 +1,11 @@
-import type { Room, Player, RoomSettings, RoomPublicState, GameType, CharadesSettings, ImposterSettings, EmojiSettings } from '@chitram/shared';
+import type { Room, Player, RoomSettings, RoomPublicState, GameType, CharadesSettings, ImposterSettings, EmojiSettings, DrawIdentifySettings } from '@chitram/shared';
 import type { GameServer } from '../socket/index';
 import { GameEngine } from './GameEngine';
 import { WordBank } from './WordBank';
 import { CharadesEngine } from './CharadesEngine';
 import { ImposterEngine } from './ImposterEngine';
 import { EmojiEngine } from './EmojiEngine';
+import { DrawIdentifyEngine } from './DrawIdentifyEngine';
 
 function generateRoomCode(): string {
   return Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -17,6 +18,7 @@ export class RoomManager {
   private charadesEngines = new Map<string, CharadesEngine>();
   private imposterEngines = new Map<string, ImposterEngine>();
   private emojiEngines = new Map<string, EmojiEngine>();
+  private drawIdentifyEngines = new Map<string, DrawIdentifyEngine>();
   private disconnectTimeouts = new Map<string, NodeJS.Timeout>();
 
   // ─── Create / Join ──────────────────────────────────────────────────────
@@ -68,6 +70,11 @@ export class RoomManager {
         totalQuestions: 10,
         difficulty: 'mixed',
         timerSeconds: 30,
+      } : undefined,
+      drawIdentifySettings: gameType === 'draw-identify' ? {
+        objectCount: 12,
+        language: 'english',
+        identificationDurationSeconds: 60,
       } : undefined,
       currentRound: 0,
       currentDrawerId: null,
@@ -167,11 +174,17 @@ export class RoomManager {
         emojiEngine.handlePlayerReconnect(oldSocketId, socketId, existingPlayer);
       }
 
+      // Notify Draw & Identify engine of reconnection
+      const drawIdentifyEngine = this.drawIdentifyEngines.get(code);
+      if (drawIdentifyEngine) {
+        drawIdentifyEngine.handlePlayerReconnect(oldSocketId, socketId, existingPlayer);
+      }
+
       return { room, player: existingPlayer };
     }
 
     // New player joining (even mid-game)
-    const maxPlayers = room.gameType === 'charades' ? 24 : room.gameType === 'imposter' ? 12 : 8;
+    const maxPlayers = room.gameType === 'charades' ? 24 : room.gameType === 'imposter' ? 12 : room.gameType === 'emoji' ? 20 : 16;
     if (room.players.length >= maxPlayers) throw new Error('Room is full');
 
     const player: Player = {
@@ -269,6 +282,28 @@ export class RoomManager {
       };
       engine = new EmojiEngine(room, io, settings);
       this.emojiEngines.set(code, engine);
+    }
+    return engine;
+  }
+
+  // ─── Draw & Identify Integration ──────────────────────────────────────────
+
+  getDrawIdentifyEngine(code: string): DrawIdentifyEngine | undefined {
+    return this.drawIdentifyEngines.get(code);
+  }
+
+  ensureDrawIdentifyEngine(code: string, io: GameServer): DrawIdentifyEngine {
+    let engine = this.drawIdentifyEngines.get(code);
+    if (!engine) {
+      const room = this.rooms.get(code);
+      if (!room) throw new Error('Room not found');
+      const settings = room.drawIdentifySettings ?? {
+        objectCount: 12,
+        language: 'english',
+        identificationDurationSeconds: 60,
+      };
+      engine = new DrawIdentifyEngine(room, io, settings);
+      this.drawIdentifyEngines.set(code, engine);
     }
     return engine;
   }
@@ -438,6 +473,7 @@ export class RoomManager {
     this.engines.get(code)?.stop();
     this.charadesEngines.get(code)?.stop();
     this.emojiEngines.get(code)?.destroy();
+    this.drawIdentifyEngines.get(code)?.stop();
 
     // Cancel all disconnect timers for this room
     for (const [key, timer] of this.disconnectTimeouts.entries()) {
@@ -478,6 +514,8 @@ export class RoomManager {
     this.imposterEngines.delete(code);
     this.emojiEngines.get(code)?.destroy();
     this.emojiEngines.delete(code);
+    this.drawIdentifyEngines.get(code)?.stop();
+    this.drawIdentifyEngines.delete(code);
   }
 
   // ─── Helpers ────────────────────────────────────────────────────────────

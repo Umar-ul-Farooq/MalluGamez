@@ -8,6 +8,8 @@ import type {
   ImposterPublicState,
   ImposterSecretPayload,
   EmojiPublicState,
+  DrawIdentifyPublicState,
+  DrawIdentifyObjectItem,
 } from '@chitram/shared';
 
 export interface Toast {
@@ -55,6 +57,11 @@ interface GameState {
   emojiState: EmojiPublicState | null;
   emojiGuessFeedback: { isCorrect: boolean; message: string; points?: number } | null;
 
+  // ─── Draw & Identify Challenge In-game ────────────────────────────────────
+  drawIdentifyState: DrawIdentifyPublicState | null;
+  drawIdentifySecretList: DrawIdentifyObjectItem[];
+  lastTickedObject: { objectIndex: number; identifiedBy: string; identifiedCount: number } | null;
+
   // ─── UI ───────────────────────────────────────────────────────────────────
   toasts: Toast[];
 
@@ -75,6 +82,9 @@ interface GameState {
   setHasVotedImposter: (v: boolean) => void;
   setEmojiState: (s: EmojiPublicState) => void;
   setEmojiGuessFeedback: (f: { isCorrect: boolean; message: string; points?: number } | null) => void;
+  setDrawIdentifyState: (s: DrawIdentifyPublicState) => void;
+  setDrawIdentifySecretList: (list: DrawIdentifyObjectItem[]) => void;
+  setLastTickedObject: (o: { objectIndex: number; identifiedBy: string; identifiedCount: number } | null) => void;
   handleCharadesRoundEnd: (p: {
     result: 'correct' | 'timeout';
     pointsAwardedTo: 'A' | 'B';
@@ -109,6 +119,9 @@ export const useGameStore = create<GameState>((set, get) => ({
   hasVotedImposter: false,
   emojiState: null,
   emojiGuessFeedback: null,
+  drawIdentifyState: null,
+  drawIdentifySecretList: [],
+  lastTickedObject: null,
   toasts: [],
 
   setMyId:      (id) => set({ myId: id }),
@@ -146,6 +159,9 @@ export const useGameStore = create<GameState>((set, get) => ({
   setHasVotedImposter: (v) => set({ hasVotedImposter: v }),
   setEmojiState: (s) => set({ emojiState: s }),
   setEmojiGuessFeedback: (f) => set({ emojiGuessFeedback: f }),
+  setDrawIdentifyState: (s) => set({ drawIdentifyState: s }),
+  setDrawIdentifySecretList: (list) => set({ drawIdentifySecretList: list }),
+  setLastTickedObject: (o) => set({ lastTickedObject: o }),
   handleCharadesRoundEnd: (p) => {
     set({ lastCharadesRoundEnd: p, secretMovie: null });
     const teamName = p.pointsAwardedTo === 'A'
@@ -172,7 +188,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     timerRemaining: 0, lastAward: null, roundEndWord: null,
     leaderboard: [], charadesState: null, secretMovie: null,
     lastCharadesRoundEnd: null, imposterState: null, imposterSecret: null,
-    hasVotedImposter: false, emojiState: null, emojiGuessFeedback: null, toasts: [],
+    hasVotedImposter: false, emojiState: null, emojiGuessFeedback: null,
+    drawIdentifyState: null, drawIdentifySecretList: [], lastTickedObject: null, toasts: [],
   }),
 }));
 

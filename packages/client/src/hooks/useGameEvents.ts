@@ -150,6 +150,16 @@ export function useGameEvents() {
       }
     });
 
+    // ── Draw & Identify Events ──
+    socket.on('draw-identify:state', store.setDrawIdentifyState);
+    socket.on('draw-identify:secret-list', ({ objectList }) => {
+      store.setDrawIdentifySecretList(objectList);
+    });
+    socket.on('draw-identify:object-ticked', (data) => {
+      store.setLastTickedObject(data);
+      store.addToast(`✓ ${data.identifiedBy} identified object #${data.objectIndex + 1}! (${data.identifiedCount} found)`, 'success');
+    });
+
     // If already connected when this effect runs
     if (socket.connected) onConnect();
 
@@ -176,6 +186,9 @@ export function useGameEvents() {
       socket.off('emoji:state');
       socket.off('emoji:guess-result');
       socket.off('imposter:vote-registered');
+      socket.off('draw-identify:state');
+      socket.off('draw-identify:secret-list');
+      socket.off('draw-identify:object-ticked');
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

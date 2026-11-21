@@ -5,6 +5,7 @@ import { useGameStore } from '../store/gameStore';
 import CharadesMobileScreen from './CharadesMobileScreen';
 import ImposterMobileScreen from './ImposterMobileScreen';
 import EmojiMobileScreen from './EmojiMobileScreen';
+import DrawIdentifyMobileScreen from './DrawIdentifyMobileScreen';
 
 type JoinState = 'form' | 'waiting';
 
@@ -136,6 +137,11 @@ export default function LobbyScreen() {
   // If this room is for Emoji Movie Challenge, render Emoji Mobile Controller
   if (room.gameType === 'emoji') {
     return <EmojiMobileScreen />;
+  }
+
+  // If this room is for Draw & Identify Challenge, render DrawIdentify Mobile Controller
+  if (room.gameType === 'draw-identify') {
+    return <DrawIdentifyMobileScreen />;
   }
 
   const players = room.players.filter(p => !p.isHost);

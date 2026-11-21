@@ -88,6 +88,22 @@ const GAMES: GameItem[] = [
     status: 'live',
     hostUrl: '/tv?game=pictionary',
   },
+  {
+    id: 'draw-identify',
+    title: 'Draw & Identify Challenge',
+    malayalamTitle: 'വരയും കണ്ടെത്തലും',
+    subtitle: 'ചിത്രങ്ങൾ വരയ്ക്കൂ, ഒപ്പമുള്ളവർ കണ്ടെത്തട്ടെ!',
+    description: 'Fast-paced speed drawing & object identification frenzy! One draws against the clock, others shout & tick off items on TV!',
+    emoji: '✏️🔍',
+    mode: 'multiplayer',
+    playerCount: '2–16 Players',
+    badge: 'NEW',
+    badgeColor: 'bg-teal-500 text-white font-black',
+    gradient: 'from-teal-950/70 via-emerald-950/30 to-teal-950/70',
+    borderColor: 'border-teal-500/50 hover:border-teal-400',
+    status: 'live',
+    hostUrl: '/tv?game=draw-identify',
+  },
 
   // ─── Single Player Coming Soon Games ───
   {

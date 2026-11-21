@@ -20,6 +20,9 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rm: Roo
       if (gameType === 'emoji') {
         rm.ensureEmojiEngine(room.code, io);
       }
+      if (gameType === 'draw-identify') {
+        rm.ensureDrawIdentifyEngine(room.code, io);
+      }
       if (room.hostToken) {
         socket.emit('room:host-token', { hostToken: room.hostToken });
       }
@@ -50,6 +53,10 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rm: Roo
         const engine = rm.ensureEmojiEngine(room.code, io);
         socket.emit('emoji:state', engine.getPublicState());
       }
+      if (room.gameType === 'draw-identify') {
+        const engine = rm.ensureDrawIdentifyEngine(room.code, io);
+        socket.emit('draw-identify:state', engine.getPublicState());
+      }
       console.log(`[room] Host socket reclaimed room ${room.code}`);
     } catch (err: any) {
       socket.emit('room:error', err.message);
@@ -79,6 +86,10 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rm: Roo
       if (room.gameType === 'emoji') {
         const engine = rm.ensureEmojiEngine(room.code, io);
         socket.emit('emoji:state', engine.getPublicState());
+      }
+      if (room.gameType === 'draw-identify') {
+        const engine = rm.ensureDrawIdentifyEngine(room.code, io);
+        socket.emit('draw-identify:state', engine.getPublicState());
       }
       console.log(`[room] ${playerName} joined room ${room.code}`);
     } catch (err: any) {

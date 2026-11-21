@@ -40,6 +40,7 @@ export default function ImposterTVScreen({ hostIP }: Props) {
   const navigate = useNavigate();
   const { room, imposterState, timerRemaining, connected } = useGameStore();
 
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [settings, setSettings] = useState<ImposterSettings>({
     totalRounds: room?.imposterSettings?.totalRounds ?? 5,
@@ -82,17 +83,96 @@ export default function ImposterTVScreen({ hostIP }: Props) {
     getSocket().emit('imposter:restart-game');
   }
 
-  function handleForceReset() {
-    getSocket().emit('imposter:force-reset');
-    setShowResetConfirm(false);
-  }
-
-  function handleHome() {
+  function confirmForceReset() {
+    getSocket().emit('room:force-reset');
     sessionStorage.removeItem('chitram_tv_host');
-    getSocket().emit('room:leave');
     useGameStore.getState().reset();
+    setShowResetConfirm(false);
     navigate('/');
   }
+
+  function requestExit() {
+    setShowExitConfirm(true);
+  }
+
+  function confirmExit() {
+    getSocket().emit('room:terminate');
+    sessionStorage.removeItem('chitram_tv_host');
+    useGameStore.getState().reset();
+    setShowExitConfirm(false);
+    navigate('/');
+  }
+
+  const renderModals = () => (
+    <>
+      {/* Exit Confirmation Modal */}
+      {showExitConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-[#1a0f1e] border-2 border-white/20 rounded-3xl p-8 max-w-lg w-full text-center shadow-2xl space-y-5">
+            <div className="text-5xl">🚪</div>
+            <div>
+              <h3 className="text-2xl font-black text-white">Exit Game?</h3>
+              <p className="text-red-400 font-bold mt-1">കളി അവസാനിപ്പിക്കണോ?</p>
+            </div>
+            <p className="text-white/70 text-sm leading-relaxed">
+              This will end the current game session for all connected players and return everyone to the home screen.
+            </p>
+            <div className="flex gap-4 pt-2">
+              <button
+                onClick={() => setShowExitConfirm(false)}
+                className="flex-1 py-3 text-sm font-bold bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all"
+              >
+                Cancel / വേണ്ട
+              </button>
+              <button
+                onClick={confirmExit}
+                className="flex-1 py-3 text-sm font-black bg-red-600 hover:bg-red-500 text-white rounded-xl shadow-lg transition-all"
+              >
+                Yes, Exit Game
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Force Reset Confirmation Modal */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-[#1a0f1e] border-2 border-red-500/50 rounded-3xl p-8 max-w-lg w-full text-center shadow-2xl space-y-5">
+            <div className="text-5xl">⚠️</div>
+            <div>
+              <h3 className="text-2xl font-black text-white">Force Reset This Room?</h3>
+              <p className="text-red-400 font-bold mt-1">ഈ റൂം പൂർണ്ണമായി റീസെറ്റ് ചെയ്യണോ?</p>
+            </div>
+            <div className="bg-red-950/40 border border-red-500/30 rounded-2xl p-4 text-left text-xs text-white/80 space-y-2">
+              <p className="font-semibold text-white">
+                Force reset this room? All connected players will be removed from the current game session, and the TV and mobile screens will return to a clean state.
+              </p>
+              <p className="text-white/50 text-[11px]">
+                • Terminates the active game session on the server.
+                <br />• Clears all temporary roles, scores, and stale connections.
+                <br />• Returns all mobile phones and the TV to the home screen.
+              </p>
+            </div>
+            <div className="flex gap-4 pt-2">
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                className="flex-1 py-3 text-sm font-bold bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmForceReset}
+                className="flex-1 py-3 text-sm font-black bg-red-600 hover:bg-red-500 text-white rounded-xl shadow-lg shadow-red-900/50 transition-all"
+              >
+                Force Reset
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
 
   // ──────────────────────────────────────────────────────────────────────────
   // VIEW 1: LOBBY & GAME SETTINGS
@@ -117,7 +197,7 @@ export default function ImposterTVScreen({ hostIP }: Props) {
         <div className="flex items-center justify-between px-10 pt-6 pb-3 shrink-0">
           <div className="flex items-center gap-5">
             <button
-              onClick={handleHome}
+              onClick={requestExit}
               className="btn-secondary text-sm py-2 px-4 flex items-center gap-2 hover:bg-white/20 transition-all font-semibold"
             >
               ← Home / പ്രധാന പേജ്
@@ -137,14 +217,6 @@ export default function ImposterTVScreen({ hostIP }: Props) {
           </div>
 
           <div className="flex items-center gap-4">
-            <button
-              onClick={() => setShowResetConfirm(true)}
-              className="text-xs bg-red-950/60 hover:bg-red-900 border border-red-500/40 text-red-300 hover:text-white px-3.5 py-2 rounded-xl transition-all font-bold flex items-center gap-1.5"
-              title="Force reset room to clean lobby state"
-            >
-              <span>⚠️</span>
-              <span>Force Reset Session</span>
-            </button>
             <div className="bg-white/5 border border-white/10 px-4 py-1.5 rounded-full flex items-center gap-2">
               <span className={`w-2.5 h-2.5 rounded-full ${connected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
               <span className="text-white/80 text-sm font-semibold">{players.length} Players</span>
@@ -152,6 +224,15 @@ export default function ImposterTVScreen({ hostIP }: Props) {
             <div className="bg-red-500/20 border border-red-500/40 px-4 py-1.5 rounded-xl font-mono font-bold text-red-300 text-lg">
               Room: {room.code}
             </div>
+            {/* Small discreet Force Reset button */}
+            <button
+              onClick={() => setShowResetConfirm(true)}
+              className="text-[11px] text-white/30 hover:text-red-400 hover:bg-red-950/30 border border-white/10 hover:border-red-500/40 px-2.5 py-1.5 rounded-lg transition-all font-semibold flex items-center gap-1.5"
+              title="Force reset this room and all sessions"
+            >
+              <span className="text-xs">🔄</span>
+              <span>Force Reset</span>
+            </button>
           </div>
         </div>
 
@@ -163,7 +244,7 @@ export default function ImposterTVScreen({ hostIP }: Props) {
               <span><strong>Session Interrupted:</strong> The previous game session was interrupted. You can start fresh or force reset to a clean lobby.</span>
             </div>
             <button
-              onClick={handleForceReset}
+              onClick={() => setShowResetConfirm(true)}
               className="bg-red-600 hover:bg-red-500 text-white font-bold px-3 py-1.5 rounded-lg whitespace-nowrap shadow-md"
             >
               Force Reset to Clean Lobby
@@ -342,6 +423,8 @@ export default function ImposterTVScreen({ hostIP }: Props) {
           </div>
 
         </div>
+
+        {renderModals()}
       </div>
     );
   }
@@ -377,17 +460,24 @@ export default function ImposterTVScreen({ hostIP }: Props) {
           ))}
         </div>
 
-        <div className="flex gap-4">
-          <button onClick={handleHome} className="btn-secondary text-base py-3 px-8">
+        <div className="flex items-center gap-4">
+          <button onClick={requestExit} className="btn-secondary text-base py-3 px-8">
             🏠 Home / പ്രധാന പേജ്
           </button>
           <button onClick={handleRestart} className="btn-primary bg-red-600 hover:bg-red-500 text-white font-black text-base py-3 px-10 shadow-lg">
             🔄 Rematch / വീണ്ടും കളിക്കാം
           </button>
-          <button onClick={() => setShowResetConfirm(true)} className="btn-secondary text-base py-3 px-6 text-red-300 hover:text-white border-red-500/40">
-            ⚠️ Force Reset
+          <button
+            onClick={() => setShowResetConfirm(true)}
+            className="text-[11px] text-white/30 hover:text-red-400 hover:bg-red-950/30 border border-white/10 hover:border-red-500/40 px-2.5 py-2 rounded-lg transition-all font-semibold flex items-center gap-1.5 ml-4"
+            title="Force reset this room and all sessions"
+          >
+            <span className="text-xs">🔄</span>
+            <span>Force Reset</span>
           </button>
         </div>
+
+        {renderModals()}
       </div>
     );
   }
@@ -402,7 +492,7 @@ export default function ImposterTVScreen({ hostIP }: Props) {
       <div className="flex items-center justify-between px-10 py-3 border-b border-white/10 shrink-0 bg-gray-900/80 backdrop-blur-md">
         <div className="flex items-center gap-4">
           <button
-            onClick={handleHome}
+            onClick={requestExit}
             className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1 text-white/70 hover:text-white"
           >
             ← Exit
@@ -434,16 +524,18 @@ export default function ImposterTVScreen({ hostIP }: Props) {
           >
             <span>🔄</span> <span>Restart</span>
           </button>
-          <button
-            onClick={() => setShowResetConfirm(true)}
-            className="text-xs bg-red-600/30 hover:bg-red-600 border border-red-500/50 text-red-200 hover:text-white font-bold px-3 py-1.5 rounded-xl transition-all flex items-center gap-1 shadow-sm"
-            title="Force reset session back to lobby"
-          >
-            <span>⚠️</span> <span>Force Reset</span>
-          </button>
           <div className="bg-red-500/20 border border-red-500/40 px-3 py-1 rounded-xl font-mono font-bold text-red-300 text-sm">
             {room.code}
           </div>
+          {/* Small discreet Force Reset button */}
+          <button
+            onClick={() => setShowResetConfirm(true)}
+            className="text-[11px] text-white/30 hover:text-red-400 hover:bg-red-950/40 border border-white/10 hover:border-red-500/40 px-2 py-1 rounded-lg transition-all font-semibold flex items-center gap-1"
+            title="Force reset this room and all sessions"
+          >
+            <span className="text-xs">🔄</span>
+            <span>Force Reset</span>
+          </button>
         </div>
       </div>
 
@@ -664,38 +756,7 @@ export default function ImposterTVScreen({ hostIP }: Props) {
 
       </div>
 
-      {/* Force Reset Confirmation Modal */}
-      {showResetConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-[#1a0f1e] border-2 border-red-500/50 rounded-3xl p-8 max-w-lg w-full text-center shadow-2xl space-y-6">
-            <div className="text-6xl">⚠️</div>
-            <div>
-              <h3 className="text-3xl font-black text-white">Force Reset Session?</h3>
-              <p className="text-red-400 font-bold mt-1">ഈ സെഷൻ റീസെറ്റ് ചെയ്യണോ?</p>
-            </div>
-            <div className="bg-red-950/40 border border-red-500/30 rounded-2xl p-4 text-left text-sm text-white/80 space-y-2">
-              <p>• Terminates the current stuck or active game immediately.</p>
-              <p>• Stops all active timers, clears stale voting, roles, and words.</p>
-              <p>• Returns everyone to a fresh, clean lobby in this room ({room.code}).</p>
-              <p>• Room code and joined players are preserved.</p>
-            </div>
-            <div className="flex gap-4">
-              <button
-                onClick={() => setShowResetConfirm(false)}
-                className="flex-1 btn-secondary py-3 text-base font-bold bg-white/10 hover:bg-white/20 text-white rounded-xl"
-              >
-                Cancel / വേണ്ട
-              </button>
-              <button
-                onClick={handleForceReset}
-                className="flex-1 btn-primary py-3 text-base font-black bg-red-600 hover:bg-red-500 text-white rounded-xl shadow-lg shadow-red-900/50"
-              >
-                Yes, Force Reset
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {renderModals()}
 
     </div>
   );

@@ -58,7 +58,8 @@ export default function EmojiTVScreen({ hostIP }: Props) {
   }
 
   function handleExit() {
-    getSocket().emit('room:leave');
+    getSocket().emit('room:terminate');
+    sessionStorage.removeItem('chitram_tv_host');
     useGameStore.getState().reset();
     navigate('/');
   }

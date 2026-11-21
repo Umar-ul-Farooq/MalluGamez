@@ -56,7 +56,8 @@ export default function CharadesTVScreen({ hostIP }: Props) {
   }
 
   function handleHome() {
-    getSocket().emit('room:leave');
+    getSocket().emit('room:terminate');
+    sessionStorage.removeItem('chitram_tv_host');
     useGameStore.getState().reset();
     navigate('/');
   }

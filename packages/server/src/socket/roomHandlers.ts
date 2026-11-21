@@ -107,6 +107,26 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rm: Roo
     }
   });
 
+  socket.on('room:terminate', () => {
+    try {
+      const room = rm.getRoomByPlayer(socket.id);
+      if (!room) return;
+      rm.terminateRoom(room.code, socket.id, io, 'TV Host exited the game');
+    } catch (err: any) {
+      console.error('[room:terminate error]', err);
+    }
+  });
+
+  socket.on('room:force-reset', () => {
+    try {
+      const room = rm.getRoomByPlayer(socket.id);
+      if (!room) return;
+      rm.terminateRoom(room.code, socket.id, io, 'Host performed Force Reset');
+    } catch (err: any) {
+      console.error('[room:force-reset error]', err);
+    }
+  });
+
   socket.on('game:start', () => {
     try {
       const room = rm.getRoomByPlayer(socket.id);

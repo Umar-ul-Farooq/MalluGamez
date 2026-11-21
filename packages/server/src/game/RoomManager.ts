@@ -330,20 +330,9 @@ export class RoomManager {
 
     if (player.isHost) {
       if (explicitLeave) {
-        // Host deliberately exited: reset active imposter session and do not transfer host role
-        console.log(`[room] Host explicitly left room ${code}`);
-        if (room.gameType === 'imposter') {
-          this.imposterEngines.get(code)?.forceReset('Host exited the room');
-        }
-        player.isOnline = false;
-        this.playerToRoom.delete(socketId);
-
-        if (!room.players.some(x => !x.isHost && x.isOnline)) {
-          this.destroyRoom(code);
-          return;
-        }
-
-        io?.to(code).emit('room:updated', this.publicState(code));
+        // Host deliberately exited: cleanly terminate room and all active sessions
+        console.log(`[room] Host explicitly left room ${code}. Terminating room.`);
+        this.terminateRoom(code, socketId, io, 'Host exited the room');
         return;
       }
 
@@ -365,12 +354,9 @@ export class RoomManager {
 
         const hPlayer = currentRoom.players.find(p => p.isHost);
         if (hPlayer && !hPlayer.isOnline) {
-          console.log(`[room] Host grace period expired for room ${code}.`);
-          // If no online non-host players remain, clean up room
-          if (!currentRoom.players.some(x => !x.isHost && x.isOnline)) {
-            this.destroyRoom(code);
-            return;
-          }
+          console.log(`[room] Host grace period expired for room ${code}. Terminating room.`);
+          this.terminateRoom(code, hPlayer.id, io, 'Host disconnected and grace period expired');
+          return;
         }
       }, 90000); // 90 seconds grace period for TV host
 
@@ -426,6 +412,62 @@ export class RoomManager {
     this.disconnectTimeouts.set(timeoutKey, timer);
   }
 
+  terminateRoom(code: string, requesterSocketId: string, io?: GameServer, reason = 'Room terminated by host'): boolean {
+    const room = this.rooms.get(code);
+    if (!room) return false;
+
+    const player = room.players.find(p => p.id === requesterSocketId);
+    if (player && !player.isHost) {
+      console.warn(`[room] Non-host ${requesterSocketId} attempted to terminate room ${code}`);
+      return false;
+    }
+
+    console.log(`[room] Terminating room ${code} and all active game sessions. Reason: ${reason}`);
+
+    // Invalidate active session ID
+    room.sessionId = null;
+
+    // Reset and stop Imposter engine if present
+    const imposterEngine = this.imposterEngines.get(code);
+    if (imposterEngine) {
+      imposterEngine.forceReset(reason);
+      imposterEngine.stop();
+    }
+
+    // Stop other game engines
+    this.engines.get(code)?.stop();
+    this.charadesEngines.get(code)?.stop();
+    this.emojiEngines.get(code)?.destroy();
+
+    // Cancel all disconnect timers for this room
+    for (const [key, timer] of this.disconnectTimeouts.entries()) {
+      if (key.startsWith(`${code}:`)) {
+        clearTimeout(timer);
+        this.disconnectTimeouts.delete(key);
+      }
+    }
+
+    // Broadcast room:terminated and imposter:session-terminated to all players in the room
+    io?.to(code).emit('room:terminated', { reason });
+    io?.to(code).emit('imposter:session-terminated', { reason });
+
+    // Remove player mappings
+    for (const p of room.players) {
+      this.playerToRoom.delete(p.id);
+    }
+    this.playerToRoom.delete(requesterSocketId);
+
+    // Destroy room entity
+    this.destroyRoom(code);
+
+    // Eject sockets from the socket.io room
+    try {
+      io?.in(code).socketsLeave(code);
+    } catch (e) {}
+
+    return true;
+  }
+
   destroyRoom(code: string) {
     this.rooms.delete(code);
     this.engines.get(code)?.stop();
@@ -439,6 +481,14 @@ export class RoomManager {
   }
 
   // ─── Helpers ────────────────────────────────────────────────────────────
+
+  getRoom(code: string): Room | undefined {
+    return this.rooms.get(code);
+  }
+
+  getPlayerRoom(socketId: string): string | undefined {
+    return this.playerToRoom.get(socketId);
+  }
 
   getRoomByPlayer(socketId: string): Room | undefined {
     const code = this.playerToRoom.get(socketId);

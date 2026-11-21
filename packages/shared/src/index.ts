@@ -252,6 +252,8 @@ export interface ClientToServerEvents {
   'room:join':   (payload: { roomCode: string; playerName: string }) => void;
   'room:reclaim-host': (payload: { roomCode: string; hostToken: string }) => void;
   'room:leave':  () => void;
+  'room:terminate': () => void; // host terminates room and returns all to home
+  'room:force-reset': () => void; // host force-resets room and all sessions
 
   'game:start':  () => void;                        // host only
   'game:settings': (settings: RoomSettings) => void; // host only
@@ -305,6 +307,8 @@ export interface ServerToClientEvents {
   'room:updated': (room: RoomPublicState) => void;
   'room:error':   (message: string) => void;
   'room:host-token': (payload: { hostToken: string }) => void;
+  'room:terminated': (payload: { reason: string }) => void;
+  'room:reset': (payload: { reason: string }) => void;
 
   // Pictionary
   'game:word':    (payload: { word: string; manglish: string; category?: string }) => void; // drawer only

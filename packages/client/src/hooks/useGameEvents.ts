@@ -62,10 +62,28 @@ export function useGameEvents() {
         sessionStorage.setItem('chitram_tv_host', JSON.stringify({ roomCode: store.room.code, hostToken }));
       }
     });
+    socket.on('room:terminated', ({ reason }) => {
+      console.log(`[room] Room terminated: ${reason}`);
+      localStorage.removeItem('chitram_session');
+      sessionStorage.removeItem('chitram_tv_host');
+      store.reset();
+      store.addToast(`ℹ️ ${reason || 'Game session ended by TV host'}`, 'info');
+      navigate('/');
+    });
+    socket.on('room:reset', ({ reason }) => {
+      console.log(`[room] Room reset: ${reason}`);
+      localStorage.removeItem('chitram_session');
+      sessionStorage.removeItem('chitram_tv_host');
+      store.reset();
+      store.addToast(`⚠️ ${reason || 'Game session was reset'}`, 'info');
+      navigate('/');
+    });
     socket.on('room:error',    (msg) => {
       if (msg.includes('not found') || msg.includes('Invalid host credentials')) {
         localStorage.removeItem('chitram_session');
         sessionStorage.removeItem('chitram_tv_host');
+        store.reset();
+        navigate('/');
       }
       store.addToast(`⚠️ ${msg}`, 'error');
     });

@@ -10,6 +10,12 @@ function createMockIO() {
         emittedEvents.push({ target, event, data });
       },
     }),
+    in: (target: string) => ({
+      emit: (event: string, data: any) => {
+        emittedEvents.push({ target, event, data });
+      },
+      socketsLeave: (_room: string) => {},
+    }),
     emit: (event: string, data: any) => {
       emittedEvents.push({ target: 'all', event, data });
     },
@@ -38,7 +44,7 @@ async function runTestSuite() {
   console.log('================================================================\n');
 
   let passed = 0;
-  const total = 8;
+  const total = 14;
 
   // ──────────────────────────────────────────────────────────────────────────
   // TEST 1: Session Interruption & Fresh Start
@@ -496,6 +502,263 @@ async function runTestSuite() {
     passed++;
   } catch (err) {
     console.error('❌ TEST 8 FAILED:', err);
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // TEST 9: Test A - Normal Exit & Complete Server Cleanup
+  // ──────────────────────────────────────────────────────────────────────────
+  try {
+    console.log('▶ TEST 9: Test A - Normal Exit & Complete Server Cleanup');
+    const mockIO = createMockIO();
+    const rm = new RoomManager();
+
+    // TV creates room
+    const { room } = rm.createRoom('tv-sock-9', 'TV Host', 'imposter');
+    const code = room.code;
+
+    // 3 mobile players join
+    rm.joinRoom('p1-sock-9', code, 'Player 1');
+    rm.joinRoom('p2-sock-9', code, 'Player 2');
+    rm.joinRoom('p3-sock-9', code, 'Player 3');
+
+    const engine = rm.ensureImposterEngine(code, mockIO);
+    engine.startGame();
+    assert(engine.getSessionId() !== null, 'Game session must be active');
+
+    // TV initiates Exit
+    mockIO.clearEvents();
+    const terminated = rm.terminateRoom(code, 'tv-sock-9', mockIO, 'Host exited the room');
+    assert(terminated === true, 'terminateRoom must return true for valid host');
+
+    // 1. Check room:terminated event sent to the room
+    const termEvent = mockIO.getEvents().find(e => e.event === 'room:terminated');
+    assert(!!termEvent, 'room:terminated event must be emitted to room');
+    assert(termEvent?.data?.reason === 'Host exited the room', 'Reason must match exit reason');
+
+    // 2. Check imposter:session-terminated event sent
+    const impTermEvent = mockIO.getEvents().find(e => e.event === 'imposter:session-terminated');
+    assert(!!impTermEvent, 'imposter:session-terminated event must be emitted');
+
+    // 3. Room must be completely deleted from server memory
+    assert(rm.getRoom(code) === undefined, 'Room must be destroyed on server');
+
+    // 4. Imposter engine must be deleted
+    assert(rm.getImposterEngine(code) === undefined, 'ImposterEngine must be cleaned up from RoomManager');
+
+    // 5. All player socket mappings must be cleaned up
+    assert(rm.getPlayerRoom('p1-sock-9') === undefined, 'Player 1 must be unmapped from room');
+    assert(rm.getPlayerRoom('p2-sock-9') === undefined, 'Player 2 must be unmapped from room');
+    assert(rm.getPlayerRoom('p3-sock-9') === undefined, 'Player 3 must be unmapped from room');
+    assert(rm.getPlayerRoom('tv-sock-9') === undefined, 'TV host must be unmapped from room');
+
+    console.log('  ✓ Normal Exit cleanly broadcasts termination and purges room and engine from server');
+    console.log('✅ TEST 9 PASSED\n');
+    passed++;
+  } catch (err) {
+    console.error('❌ TEST 9 FAILED:', err);
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // TEST 10: Test B - Force Reset During Active Game (Round 3)
+  // ──────────────────────────────────────────────────────────────────────────
+  try {
+    console.log('▶ TEST 10: Test B - Force Reset During Active Game (Round 3)');
+    const mockIO = createMockIO();
+    const rm = new RoomManager();
+
+    const { room } = rm.createRoom('tv-sock-10', 'TV Host', 'imposter');
+    const code = room.code;
+
+    rm.joinRoom('p1-sock-10', code, 'Player 1');
+    rm.joinRoom('p2-sock-10', code, 'Player 2');
+    rm.joinRoom('p3-sock-10', code, 'Player 3');
+
+    const engine = rm.ensureImposterEngine(code, mockIO);
+    engine.updateSettings({ totalRounds: 5 });
+    engine.startGame();
+
+    // Fast-forward to Round 3, active voting
+    room.imposterState!.currentRound = 3;
+    room.imposterState!.roundPhase = 'voting';
+    const oldSessionId = engine.getSessionId();
+    assert(oldSessionId !== null, 'Session ID must exist in Round 3');
+
+    // Host triggers Force Reset
+    mockIO.clearEvents();
+    const resetSuccess = rm.terminateRoom(code, 'tv-sock-10', mockIO, 'Host force reset the room');
+    assert(resetSuccess === true, 'Force reset must succeed');
+
+    // Verify room is destroyed and cannot be referenced
+    assert(rm.getRoom(code) === undefined, 'Room must be null after force reset');
+    assert(rm.getImposterEngine(code) === undefined, 'Engine must be removed after force reset');
+
+    // Verify termination events were sent to all clients
+    const resetEvents = mockIO.getEvents().filter(e => e.event === 'room:terminated' || e.event === 'room:reset');
+    assert(resetEvents.length > 0, 'Reset / termination events must be broadcast to clients');
+
+    console.log('  ✓ Force Reset during mid-game (Round 3) stops engine and completely purges session');
+    console.log('✅ TEST 10 PASSED\n');
+    passed++;
+  } catch (err) {
+    console.error('❌ TEST 10 FAILED:', err);
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // TEST 11: Test C - Multi-Player Consistency & Desync Prevention
+  // ──────────────────────────────────────────────────────────────────────────
+  try {
+    console.log('▶ TEST 11: Test C - Multi-Player Consistency & Desync Prevention');
+    const mockIO = createMockIO();
+    const rm = new RoomManager();
+
+    const { room } = rm.createRoom('tv-sock-11', 'TV Host', 'imposter');
+    const code = room.code;
+
+    // 4 mobile players
+    const playerSockets = ['p1-11', 'p2-11', 'p3-11', 'p4-11'];
+    playerSockets.forEach((s, idx) => rm.joinRoom(s, code, `Player ${idx + 1}`));
+
+    const engine = rm.ensureImposterEngine(code, mockIO);
+    engine.startGame();
+
+    // Terminate room
+    mockIO.clearEvents();
+    rm.terminateRoom(code, 'tv-sock-11', mockIO, 'Host closed room');
+
+    // Verify every single player socket was unmapped
+    for (const s of playerSockets) {
+      assert(rm.getPlayerRoom(s) === undefined, `Player socket ${s} must be unmapped`);
+    }
+
+    // Verify event targeted the room channel where all players listen
+    const termEvent = mockIO.getEvents().find(e => e.event === 'room:terminated');
+    assert(termEvent?.target === code, 'Termination event must be broadcast to entire room channel');
+
+    console.log('  ✓ All connected mobile players simultaneously receive termination broadcast and are unmapped');
+    console.log('✅ TEST 11 PASSED\n');
+    passed++;
+  } catch (err) {
+    console.error('❌ TEST 11 FAILED:', err);
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // TEST 12: Test D - Reconnection Rejection for Terminated Rooms
+  // ──────────────────────────────────────────────────────────────────────────
+  try {
+    console.log('▶ TEST 12: Test D - Reconnection Rejection for Terminated Rooms');
+    const mockIO = createMockIO();
+    const rm = new RoomManager();
+
+    const { room } = rm.createRoom('tv-sock-12', 'TV Host', 'imposter');
+    const code = room.code;
+    const hostToken = room.hostToken!;
+
+    const p1 = rm.joinRoom('p1-sock-12', code, 'Player 1');
+    const p1Id = p1.player.id;
+
+    // Terminate room
+    rm.terminateRoom(code, 'tv-sock-12', mockIO, 'Room ended');
+
+    // Attempt 1: Mobile player tries to rejoin stale room
+    let playerRejoinFailed = false;
+    try {
+      rm.joinRoom('p1-new-sock', code, 'Player 1');
+    } catch (err: any) {
+      playerRejoinFailed = true;
+      assert(err.message.includes('not found'), `Expected 'not found' error, got: ${err.message}`);
+    }
+    assert(playerRejoinFailed, 'Rejoining a terminated room must fail with Room not found');
+
+    // Attempt 2: TV tries to reclaim host on stale room
+    let hostReclaimFailed = false;
+    try {
+      rm.reclaimHost('tv-new-sock', code, hostToken);
+    } catch (err: any) {
+      hostReclaimFailed = true;
+      assert(err.message.includes('not found'), `Expected 'not found' error, got: ${err.message}`);
+    }
+    assert(hostReclaimFailed, 'Reclaiming host on terminated room must fail with Room not found');
+
+    console.log('  ✓ Stale reconnect attempts (mobile and TV) are firmly rejected with Room not found');
+    console.log('✅ TEST 12 PASSED\n');
+    passed++;
+  } catch (err) {
+    console.error('❌ TEST 12 FAILED:', err);
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // TEST 13: Test E - Multi-Room Isolation
+  // ──────────────────────────────────────────────────────────────────────────
+  try {
+    console.log('▶ TEST 13: Test E - Multi-Room Isolation');
+    const mockIO = createMockIO();
+    const rm = new RoomManager();
+
+    // Create Room 1
+    const { room: room1 } = rm.createRoom('tv-sock-r1', 'TV 1', 'imposter');
+    const code1 = room1.code;
+    rm.joinRoom('p1-r1', code1, 'Player 1A');
+    rm.joinRoom('p2-r1', code1, 'Player 1B');
+    rm.joinRoom('p3-r1', code1, 'Player 1C');
+    const engine1 = rm.ensureImposterEngine(code1, mockIO);
+    engine1.startGame();
+
+    // Create Room 2
+    const { room: room2 } = rm.createRoom('tv-sock-r2', 'TV 2', 'imposter');
+    const code2 = room2.code;
+    rm.joinRoom('p1-r2', code2, 'Player 2A');
+    rm.joinRoom('p2-r2', code2, 'Player 2B');
+    rm.joinRoom('p3-r2', code2, 'Player 2C');
+    const engine2 = rm.ensureImposterEngine(code2, mockIO);
+    engine2.startGame();
+
+    // Terminate Room 1
+    rm.terminateRoom(code1, 'tv-sock-r1', mockIO, 'Room 1 Host Exited');
+
+    // Room 1 must be destroyed
+    assert(rm.getRoom(code1) === undefined, 'Room 1 must be destroyed');
+    assert(rm.getImposterEngine(code1) === undefined, 'Room 1 engine must be destroyed');
+
+    // Room 2 must remain completely intact and active
+    assert(rm.getRoom(code2) !== undefined, 'Room 2 must remain active');
+    assert(rm.getImposterEngine(code2) !== undefined, 'Room 2 engine must remain active');
+    assert(rm.getRoom(code2)?.phase === 'playing', 'Room 2 phase must remain playing');
+    assert(rm.getPlayerRoom('p1-r2') === code2, 'Player 2A must still belong to Room 2');
+
+    console.log('  ✓ Terminating Room 1 had zero effect on concurrent Room 2');
+    console.log('✅ TEST 13 PASSED\n');
+    passed++;
+  } catch (err) {
+    console.error('❌ TEST 13 FAILED:', err);
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // TEST 14: Test F - Security & Non-Host Guard
+  // ──────────────────────────────────────────────────────────────────────────
+  try {
+    console.log('▶ TEST 14: Test F - Security & Non-Host Guard');
+    const mockIO = createMockIO();
+    const rm = new RoomManager();
+
+    const { room } = rm.createRoom('tv-sock-14', 'TV Host', 'imposter');
+    const code = room.code;
+    rm.joinRoom('p1-sock-14', code, 'Player 1');
+    rm.joinRoom('p2-sock-14', code, 'Player 2');
+    rm.joinRoom('p3-sock-14', code, 'Player 3');
+
+    // Non-host player attempts to terminate room
+    const unauthorizedTerm = rm.terminateRoom(code, 'p1-sock-14', mockIO, 'Malicious Exit');
+    assert(unauthorizedTerm === false, 'Non-host socket must NOT be allowed to terminate room');
+
+    // Room and game remain alive
+    assert(rm.getRoom(code) !== undefined, 'Room must still exist after unauthorized termination attempt');
+    assert(rm.getPlayerRoom('p1-sock-14') === code, 'Player 1 still belongs to room');
+
+    console.log('  ✓ Unauthorized termination attempts from non-host players are strictly blocked');
+    console.log('✅ TEST 14 PASSED\n');
+    passed++;
+  } catch (err) {
+    console.error('❌ TEST 14 FAILED:', err);
   }
 
   console.log('================================================================');

@@ -435,6 +435,5 @@ export interface DrawStroke {
   type: 'stroke' | 'start';
 }
 
-// ─── Export Emoji & Draw Identify Banks ─────────────────────────────────────
+// ─── Export Emoji Bank ──────────────────────────────────────────────────────
 export * from './emojiMovieBank';
-export * from './drawIdentifyBank';

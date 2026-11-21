@@ -7,8 +7,8 @@ import type {
   DrawIdentifyObjectItem,
   SubmittedDrawing,
 } from '@chitram/shared';
-import { getRandomObjects } from '@chitram/shared';
-import type { GameServer } from '../socket/index.js';
+import { getRandomObjects } from './DrawIdentifyBank';
+import type { GameServer } from '../socket/index';
 
 export function getAutoDrawingTimer(count: 6 | 9 | 12 | 15): number {
   switch (count) {

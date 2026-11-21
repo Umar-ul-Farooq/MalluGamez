@@ -1,7 +1,7 @@
 import type { Socket } from 'socket.io';
 import type { ClientToServerEvents, ServerToClientEvents } from '@chitram/shared';
-import type { GameServer } from './index.js';
-import type { RoomManager } from '../game/RoomManager.js';
+import type { GameServer } from './index';
+import type { RoomManager } from '../game/RoomManager';
 
 type GameSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
 

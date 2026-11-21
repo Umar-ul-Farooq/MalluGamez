@@ -43,6 +43,8 @@ export interface Room {
   charadesState?: CharadesPublicState;
   imposterState?: ImposterPublicState;
   emojiState?: EmojiPublicState;
+  sessionId?: string | null;
+  hostToken?: string;
 }
 
 // ─── Dumb Charades Types ────────────────────────────────────────────────────
@@ -155,6 +157,8 @@ export type ImposterRoundPhase =
   | 'game-end';     // final podium
 
 export interface ImposterPublicState {
+  sessionId: string | null;
+  isAbandoned?: boolean;
   currentRound: number;
   totalRounds: number;
   roundPhase: ImposterRoundPhase;
@@ -251,8 +255,9 @@ export interface EmojiPublicState {
 // ─── Socket.IO Events (Client → Server) ─────────────────────────────────────
 
 export interface ClientToServerEvents {
-  'room:create': (payload: { playerName: string; gameType?: GameType }) => void;
+  'room:create': (payload: { playerName: string; gameType?: GameType; hostToken?: string }) => void;
   'room:join':   (payload: { roomCode: string; playerName: string }) => void;
+  'room:reclaim-host': (payload: { roomCode: string; hostToken: string }) => void;
   'room:leave':  () => void;
 
   'game:start':  () => void;                        // host only
@@ -283,13 +288,14 @@ export interface ClientToServerEvents {
   // ── Imposter Events ──
   'imposter:update-settings': (payload: Partial<ImposterSettings>) => void; // host only
   'imposter:start-game': () => void; // host only
-  'imposter:start-clues': () => void; // host or player confirming readiness
-  'imposter:next-clue': () => void; // active clue giver or host
-  'imposter:end-discussion': () => void; // host only
-  'imposter:vote': (payload: { candidateId: string }) => void; // player votes
-  'imposter:submit-word-guess': (payload: { guess: string }) => void; // caught imposter guesses word
-  'imposter:next-round': () => void; // host advances round
+  'imposter:start-clues': (payload?: { sessionId?: string }) => void; // host or player confirming readiness
+  'imposter:next-clue': (payload?: { sessionId?: string }) => void; // active clue giver or host
+  'imposter:end-discussion': (payload?: { sessionId?: string }) => void; // host only
+  'imposter:vote': (payload: { candidateId: string; sessionId?: string }) => void; // player votes
+  'imposter:submit-word-guess': (payload: { guess: string; sessionId?: string }) => void; // caught imposter guesses word
+  'imposter:next-round': (payload?: { sessionId?: string }) => void; // host advances round
   'imposter:restart-game': () => void; // host restarts
+  'imposter:force-reset': () => void; // host force-resets session to clean lobby
 
   // ── Emoji Movie Challenge Events ──
   'emoji:update-settings': (payload: Partial<EmojiSettings>) => void; // host only
@@ -306,6 +312,7 @@ export interface ServerToClientEvents {
   'room:joined':  (room: RoomPublicState) => void;
   'room:updated': (room: RoomPublicState) => void;
   'room:error':   (message: string) => void;
+  'room:host-token': (payload: { hostToken: string }) => void;
 
   // Pictionary
   'game:word':    (payload: { word: string; manglish: string; category?: string }) => void; // drawer only
@@ -334,8 +341,10 @@ export interface ServerToClientEvents {
 
   // Imposter (strictly filtered server-side)
   'imposter:state': (state: ImposterPublicState) => void;
-  'imposter:secret': (payload: ImposterSecretPayload) => void; // Delivered ONLY to specific player privately!
+  'imposter:secret': (payload: ImposterSecretPayload | null) => void; // Delivered ONLY to specific player privately!
   'imposter:vote-registered': () => void;
+  'imposter:session-reset': () => void;
+  'imposter:session-terminated': (payload: { reason: string }) => void;
 
   // Emoji Movie Challenge
   'emoji:state': (state: EmojiPublicState) => void;

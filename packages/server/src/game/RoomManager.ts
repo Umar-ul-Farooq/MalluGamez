@@ -21,13 +21,17 @@ export class RoomManager {
 
   // ─── Create / Join ──────────────────────────────────────────────────────
 
-  createRoom(socketId: string, playerName: string, gameType: GameType = 'pictionary'): { room: Room; player: Player } {
+  createRoom(socketId: string, playerName: string, gameType: GameType = 'pictionary', clientHostToken?: string): { room: Room; player: Player } {
     let code = generateRoomCode();
     while (this.rooms.has(code)) code = generateRoomCode();
 
+    const hostToken = clientHostToken || ('ht_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10));
+
+    const safeName = (playerName && playerName.trim()) ? playerName.trim() : 'TV Host';
+
     const player: Player = {
       id: socketId,
-      name: playerName.trim(),
+      name: safeName,
       score: 0,
       isHost: true,
       isDrawing: false,
@@ -40,6 +44,8 @@ export class RoomManager {
       gameType,
       phase: 'lobby',
       players: [player],
+      hostToken,
+      sessionId: null,
       settings: { roundDurationSeconds: 60, totalRounds: 3 },
       charadesSettings: gameType === 'charades' ? {
         roundDurationSeconds: 90,
@@ -71,6 +77,51 @@ export class RoomManager {
     this.rooms.set(code, room);
     this.playerToRoom.set(socketId, code);
     return { room, player };
+  }
+
+  reclaimHost(socketId: string, code: string, hostToken: string): { room: Room; player: Player } {
+    const room = this.rooms.get(code);
+    if (!room) throw new Error('Room not found');
+    if (!room.hostToken || room.hostToken !== hostToken) {
+      throw new Error('Invalid host credentials');
+    }
+
+    let hostPlayer = room.players.find(p => p.isHost);
+    if (!hostPlayer) {
+      hostPlayer = {
+        id: socketId,
+        name: 'Host',
+        score: 0,
+        isHost: true,
+        isDrawing: false,
+        team: null,
+        isOnline: true,
+      };
+      room.players.unshift(hostPlayer);
+    } else {
+      const oldSocketId = hostPlayer.id;
+      this.playerToRoom.delete(oldSocketId);
+      hostPlayer.id = socketId;
+      hostPlayer.isOnline = true;
+    }
+
+    this.playerToRoom.set(socketId, code);
+
+    // Cancel host disconnect timer if any
+    const timeoutKey = `${code}:host`;
+    if (this.disconnectTimeouts.has(timeoutKey)) {
+      clearTimeout(this.disconnectTimeouts.get(timeoutKey));
+      this.disconnectTimeouts.delete(timeoutKey);
+    }
+
+    // Recover imposter session if abandoned
+    const imposterEngine = this.imposterEngines.get(code);
+    if (imposterEngine) {
+      imposterEngine.recoverFromAbandonment();
+    }
+
+    console.log(`[room] TV host successfully reclaimed room ${code}`);
+    return { room, player: hostPlayer };
   }
 
   joinRoom(socketId: string, code: string, playerName: string): { room: Room; player: Player } {
@@ -277,28 +328,75 @@ export class RoomManager {
     const player = room.players.find(p => p.id === socketId);
     if (!player) return;
 
+    if (player.isHost) {
+      if (explicitLeave) {
+        // Host deliberately exited: reset active imposter session and do not transfer host role
+        console.log(`[room] Host explicitly left room ${code}`);
+        if (room.gameType === 'imposter') {
+          this.imposterEngines.get(code)?.forceReset('Host exited the room');
+        }
+        player.isOnline = false;
+        this.playerToRoom.delete(socketId);
+
+        if (!room.players.some(x => !x.isHost && x.isOnline)) {
+          this.destroyRoom(code);
+          return;
+        }
+
+        io?.to(code).emit('room:updated', this.publicState(code));
+        return;
+      }
+
+      // Host unintentional disconnect (refresh, network drop):
+      console.log(`[room] Host disconnected from room ${code}. Starting 90s grace period.`);
+      player.isOnline = false;
+      this.imposterEngines.get(code)?.markAbandoned();
+      io?.to(code).emit('room:updated', this.publicState(code));
+
+      const timeoutKey = `${code}:host`;
+      if (this.disconnectTimeouts.has(timeoutKey)) {
+        clearTimeout(this.disconnectTimeouts.get(timeoutKey));
+      }
+
+      const timer = setTimeout(() => {
+        this.disconnectTimeouts.delete(timeoutKey);
+        const currentRoom = this.rooms.get(code);
+        if (!currentRoom) return;
+
+        const hPlayer = currentRoom.players.find(p => p.isHost);
+        if (hPlayer && !hPlayer.isOnline) {
+          console.log(`[room] Host grace period expired for room ${code}.`);
+          // If no online non-host players remain, clean up room
+          if (!currentRoom.players.some(x => !x.isHost && x.isOnline)) {
+            this.destroyRoom(code);
+            return;
+          }
+        }
+      }, 90000); // 90 seconds grace period for TV host
+
+      this.disconnectTimeouts.set(timeoutKey, timer);
+      return;
+    }
+
+    // ── Non-host regular player disconnect ──
     if (explicitLeave) {
       // Deliberate exit: remove immediately
       room.players = room.players.filter(p => p.id !== socketId);
       this.playerToRoom.delete(socketId);
 
-      if (room.players.length === 0) {
+      if (room.players.length === 0 || !room.players.some(x => x.isOnline)) {
         this.destroyRoom(code);
         return;
       }
 
-      if (!room.players.some(p => p.isHost)) {
-        room.players[0].isHost = true;
-      }
-
-      io.to(code).emit('room:updated', this.publicState(code));
+      io?.to(code).emit('room:updated', this.publicState(code));
       return;
     }
 
-    // Unintentional disconnect (e.g. mobile screen locked, sleeping, switching apps):
+    // Unintentional mobile player disconnect (screen lock, app switch):
     player.isOnline = false;
     this.imposterEngines.get(code)?.handlePlayerDisconnect(socketId);
-    io.to(code).emit('room:updated', this.publicState(code));
+    io?.to(code).emit('room:updated', this.publicState(code));
 
     // 2-minute grace period to unlock phone and re-attach
     const timeoutKey = `${code}:${player.name.toLowerCase()}`;
@@ -321,12 +419,7 @@ export class RoomManager {
           return;
         }
 
-        if (!currentRoom.players.some(x => x.isHost)) {
-          const firstOnline = currentRoom.players.find(x => x.isOnline);
-          if (firstOnline) firstOnline.isHost = true;
-        }
-
-        io.to(code).emit('room:updated', this.publicState(code));
+        io?.to(code).emit('room:updated', currentRoom ? this.publicState(code) : undefined!);
       }
     }, 120000); // 2 minutes grace period
 

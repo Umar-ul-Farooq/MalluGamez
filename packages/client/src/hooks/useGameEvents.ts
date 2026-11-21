@@ -19,6 +19,19 @@ export function useGameEvents() {
       store.setMyId(socket.id ?? '');
       store.setConnected(true);
 
+      // Check if this browser window is a TV host attempting to reconnect/refresh
+      const savedHost = sessionStorage.getItem('chitram_tv_host');
+      if (savedHost) {
+        try {
+          const { roomCode, hostToken } = JSON.parse(savedHost);
+          if (roomCode && hostToken) {
+            console.log(`[reconnect] Reclaiming host session for room ${roomCode}`);
+            socket.emit('room:reclaim-host', { roomCode, hostToken });
+            return;
+          }
+        } catch (e) {}
+      }
+
       // Auto-reconnect immediately when mobile phone unlocks screen or network reconnects!
       const saved = localStorage.getItem('chitram_session');
       if (saved) {
@@ -44,9 +57,15 @@ export function useGameEvents() {
     socket.on('disconnect',    onDisconnect);
     socket.on('room:joined',   onRoomJoined);
     socket.on('room:updated',  store.setRoom);
+    socket.on('room:host-token', ({ hostToken }) => {
+      if (store.room) {
+        sessionStorage.setItem('chitram_tv_host', JSON.stringify({ roomCode: store.room.code, hostToken }));
+      }
+    });
     socket.on('room:error',    (msg) => {
-      if (msg.includes('not found')) {
+      if (msg.includes('not found') || msg.includes('Invalid host credentials')) {
         localStorage.removeItem('chitram_session');
+        sessionStorage.removeItem('chitram_tv_host');
       }
       store.addToast(`⚠️ ${msg}`, 'error');
     });
@@ -91,6 +110,16 @@ export function useGameEvents() {
     });
     socket.on('imposter:secret', store.setImposterSecret);
     socket.on('imposter:vote-registered', () => store.setHasVotedImposter(true));
+    socket.on('imposter:session-reset', () => {
+      store.setImposterSecret(null);
+      store.setHasVotedImposter(false);
+      store.addToast('ℹ️ Imposter session was reset to the lobby.', 'info');
+    });
+    socket.on('imposter:session-terminated', ({ reason }) => {
+      store.setImposterSecret(null);
+      store.setHasVotedImposter(false);
+      store.addToast(`⚠️ Session ended: ${reason}`, 'info');
+    });
 
     // ── Emoji Events ──
     socket.on('emoji:state', store.setEmojiState);
@@ -124,6 +153,8 @@ export function useGameEvents() {
       socket.off('charades:round-ended');
       socket.off('imposter:state');
       socket.off('imposter:secret');
+      socket.off('imposter:session-reset');
+      socket.off('imposter:session-terminated');
       socket.off('emoji:state');
       socket.off('emoji:guess-result');
       socket.off('imposter:vote-registered');

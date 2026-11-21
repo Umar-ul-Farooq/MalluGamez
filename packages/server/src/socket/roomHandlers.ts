@@ -7,22 +7,63 @@ type GameSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
 
 export function registerRoomHandlers(io: GameServer, socket: GameSocket, rm: RoomManager) {
 
-  socket.on('room:create', ({ playerName, gameType = 'pictionary' }) => {
+  socket.on('room:create', ({ playerName, gameType = 'pictionary', hostToken }) => {
     try {
-      const { room, player } = rm.createRoom(socket.id, playerName, gameType);
+      const { room, player } = rm.createRoom(socket.id, playerName, gameType, hostToken);
       socket.join(room.code);
       if (gameType === 'charades') {
         rm.ensureCharadesEngine(room.code, io);
       }
+      if (gameType === 'imposter') {
+        rm.ensureImposterEngine(room.code, io);
+      }
+      if (gameType === 'emoji') {
+        rm.ensureEmojiEngine(room.code, io);
+      }
+      if (room.hostToken) {
+        socket.emit('room:host-token', { hostToken: room.hostToken });
+      }
       socket.emit('room:joined', rm.publicState(room.code));
-      console.log(`[room] ${playerName} created ${gameType} room ${room.code}`);
+      console.log(`[room] ${playerName} created ${gameType} room ${room.code} with hostToken ${room.hostToken}`);
     } catch (err: any) {
       socket.emit('room:error', err.message);
     }
   });
 
-  socket.on('room:join', ({ roomCode, playerName }) => {
+  socket.on('room:reclaim-host', ({ roomCode, hostToken }) => {
     try {
+      const { room, player } = rm.reclaimHost(socket.id, roomCode.toUpperCase(), hostToken);
+      socket.join(room.code);
+      socket.emit('room:host-token', { hostToken });
+      socket.emit('room:joined', rm.publicState(room.code));
+      io.to(room.code).emit('room:updated', rm.publicState(room.code));
+
+      if (room.gameType === 'charades') {
+        const engine = rm.ensureCharadesEngine(room.code, io);
+        socket.emit('charades:state', engine.getPublicState());
+      }
+      if (room.gameType === 'imposter') {
+        const engine = rm.ensureImposterEngine(room.code, io);
+        socket.emit('imposter:state', engine.getPublicState());
+      }
+      if (room.gameType === 'emoji') {
+        const engine = rm.ensureEmojiEngine(room.code, io);
+        socket.emit('emoji:state', engine.getPublicState());
+      }
+      console.log(`[room] Host socket reclaimed room ${room.code}`);
+    } catch (err: any) {
+      socket.emit('room:error', err.message);
+    }
+  });
+
+  socket.on('room:join', (payload: any) => {
+    try {
+      const roomCode = (payload.roomCode || payload.code || '').trim();
+      const playerName = (payload.playerName || payload.name || '').trim();
+      if (!roomCode || !playerName) {
+        socket.emit('room:error', 'Room code and player name are required');
+        return;
+      }
       const { room, player } = rm.joinRoom(socket.id, roomCode.toUpperCase(), playerName);
       socket.join(room.code);
       socket.emit('room:joined', rm.publicState(room.code));
@@ -30,6 +71,14 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rm: Roo
       if (room.gameType === 'charades') {
         const engine = rm.ensureCharadesEngine(room.code, io);
         socket.emit('charades:state', engine.getPublicState());
+      }
+      if (room.gameType === 'imposter') {
+        const engine = rm.ensureImposterEngine(room.code, io);
+        socket.emit('imposter:state', engine.getPublicState());
+      }
+      if (room.gameType === 'emoji') {
+        const engine = rm.ensureEmojiEngine(room.code, io);
+        socket.emit('emoji:state', engine.getPublicState());
       }
       console.log(`[room] ${playerName} joined room ${room.code}`);
     } catch (err: any) {

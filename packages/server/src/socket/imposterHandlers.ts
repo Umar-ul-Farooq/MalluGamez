@@ -46,13 +46,13 @@ export function registerImposterHandlers(io: GameServer, socket: GameSocket, rm:
   });
 
   // Host or player starts clue phase
-  socket.on('imposter:start-clues', () => {
+  socket.on('imposter:start-clues', (payload) => {
     try {
       const room = rm.getRoomByPlayer(socket.id);
       if (!room || room.gameType !== 'imposter') return;
 
       const engine = rm.getImposterEngine(room.code);
-      if (!engine) return;
+      if (!engine || !engine.validateSession(payload?.sessionId)) return;
 
       engine.startCluePhase();
     } catch (err: any) {
@@ -61,13 +61,13 @@ export function registerImposterHandlers(io: GameServer, socket: GameSocket, rm:
   });
 
   // Active clue giver (or host) clicks "Done / Next Clue"
-  socket.on('imposter:next-clue', () => {
+  socket.on('imposter:next-clue', (payload) => {
     try {
       const room = rm.getRoomByPlayer(socket.id);
       if (!room || room.gameType !== 'imposter') return;
 
       const engine = rm.getImposterEngine(room.code);
-      if (!engine) return;
+      if (!engine || !engine.validateSession(payload?.sessionId)) return;
 
       engine.nextClue(socket.id);
     } catch (err: any) {
@@ -76,13 +76,13 @@ export function registerImposterHandlers(io: GameServer, socket: GameSocket, rm:
   });
 
   // Host ends discussion early
-  socket.on('imposter:end-discussion', () => {
+  socket.on('imposter:end-discussion', (payload) => {
     try {
       const room = rm.getRoomByPlayer(socket.id);
       if (!room || room.gameType !== 'imposter') return;
 
       const engine = rm.getImposterEngine(room.code);
-      if (!engine) return;
+      if (!engine || !engine.validateSession(payload?.sessionId)) return;
 
       engine.endDiscussion(socket.id);
     } catch (err: any) {
@@ -91,13 +91,13 @@ export function registerImposterHandlers(io: GameServer, socket: GameSocket, rm:
   });
 
   // Player votes privately for a candidate
-  socket.on('imposter:vote', ({ candidateId }) => {
+  socket.on('imposter:vote', ({ candidateId, sessionId }) => {
     try {
       const room = rm.getRoomByPlayer(socket.id);
       if (!room || room.gameType !== 'imposter') return;
 
       const engine = rm.getImposterEngine(room.code);
-      if (!engine) return;
+      if (!engine || !engine.validateSession(sessionId)) return;
 
       engine.vote(socket.id, candidateId);
     } catch (err: any) {
@@ -106,13 +106,13 @@ export function registerImposterHandlers(io: GameServer, socket: GameSocket, rm:
   });
 
   // Caught imposter submits final secret word guess
-  socket.on('imposter:submit-word-guess', ({ guess }) => {
+  socket.on('imposter:submit-word-guess', ({ guess, sessionId }) => {
     try {
       const room = rm.getRoomByPlayer(socket.id);
       if (!room || room.gameType !== 'imposter') return;
 
       const engine = rm.getImposterEngine(room.code);
-      if (!engine) return;
+      if (!engine || !engine.validateSession(sessionId)) return;
 
       engine.submitWordGuess(socket.id, guess);
     } catch (err: any) {
@@ -121,7 +121,7 @@ export function registerImposterHandlers(io: GameServer, socket: GameSocket, rm:
   });
 
   // Host advances to next round
-  socket.on('imposter:next-round', () => {
+  socket.on('imposter:next-round', (payload) => {
     try {
       const room = rm.getRoomByPlayer(socket.id);
       if (!room || room.gameType !== 'imposter') return;
@@ -130,7 +130,7 @@ export function registerImposterHandlers(io: GameServer, socket: GameSocket, rm:
       if (!host?.isHost) return;
 
       const engine = rm.getImposterEngine(room.code);
-      if (!engine) return;
+      if (!engine || !engine.validateSession(payload?.sessionId)) return;
 
       engine.nextRound();
     } catch (err: any) {
@@ -151,6 +151,24 @@ export function registerImposterHandlers(io: GameServer, socket: GameSocket, rm:
       if (!engine) return;
 
       engine.restartGame();
+    } catch (err: any) {
+      socket.emit('room:error', err.message);
+    }
+  });
+
+  // Host force-resets session to clean lobby
+  socket.on('imposter:force-reset', () => {
+    try {
+      const room = rm.getRoomByPlayer(socket.id);
+      if (!room || room.gameType !== 'imposter') return;
+
+      const host = room.players.find(p => p.id === socket.id);
+      if (!host?.isHost) return;
+
+      const engine = rm.getImposterEngine(room.code);
+      if (!engine) return;
+
+      engine.forceReset('Host clicked Force Reset Session');
     } catch (err: any) {
       socket.emit('room:error', err.message);
     }

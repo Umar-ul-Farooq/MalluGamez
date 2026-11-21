@@ -24,6 +24,7 @@ export default function TVHostScreen() {
   const [hostIP, setHostIP] = useState<string>('');
 
   function handleHome() {
+    sessionStorage.removeItem('chitram_tv_host');
     getSocket().emit('room:leave');
     useGameStore.getState().reset();
     navigate('/');
@@ -37,16 +38,30 @@ export default function TVHostScreen() {
       .catch(() => setHostIP('localhost'));
   }, []);
 
-  // Create room as soon as socket connects
+  // Reclaim existing room or create room as soon as socket connects
   useEffect(() => {
     const socket = getSocket();
-    const tryCreate = () => {
+    const tryInit = () => {
       if (creating) return;
       setCreating(true);
+
+      const savedHost = sessionStorage.getItem('chitram_tv_host');
+      if (savedHost) {
+        try {
+          const { roomCode, hostToken, gameType } = JSON.parse(savedHost);
+          if (roomCode && hostToken && (!gameType || gameType === gameTypeParam)) {
+            console.log(`[TVHost] Reclaiming host room ${roomCode}`);
+            socket.emit('room:reclaim-host', { roomCode, hostToken });
+            return;
+          }
+        } catch (e) {}
+      }
+
       socket.emit('room:create', { playerName: 'Host', gameType: gameTypeParam });
     };
-    if (socket.connected) tryCreate();
-    else socket.once('connect', tryCreate);
+
+    if (socket.connected) tryInit();
+    else socket.once('connect', tryInit);
   }, [creating, gameTypeParam]);
 
   if (!room) {

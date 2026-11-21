@@ -9,6 +9,7 @@ import type { GameServer } from '../socket/index';
 import { ImposterWordSelector, type ImposterWord } from './ImposterWordBank';
 
 export class ImposterEngine {
+  private sessionId: string | null = null;
   private timer: NodeJS.Timeout | null = null;
   private remainingSeconds = 0;
   private currentWord: ImposterWord | null = null;
@@ -29,9 +30,23 @@ export class ImposterEngine {
     this.room.imposterSettings = settings;
   }
 
+  getSessionId(): string | null {
+    return this.sessionId;
+  }
+
+  validateSession(incomingSessionId?: string): boolean {
+    if (incomingSessionId) {
+      if (!this.sessionId || this.sessionId !== incomingSessionId) {
+        console.warn(`[ImposterEngine:${this.room.code}] Stale event rejected. Incoming: ${incomingSessionId}, Active: ${this.sessionId}`);
+        return false;
+      }
+    }
+    return true;
+  }
+
   getPublicState(): ImposterPublicState {
     const s = this.room.imposterState!;
-    return { ...s };
+    return { ...s, sessionId: this.sessionId };
   }
 
   updateSettings(patch: Partial<ImposterSettings>) {
@@ -45,11 +60,16 @@ export class ImposterEngine {
   // ─── Game Lifecycle ───────────────────────────────────────────────────────
 
   startGame() {
-    const nonHostPlayers = this.room.players.filter(p => !p.isHost);
+    this.stopTimer();
+
+    const nonHostPlayers = this.room.players.filter(p => !p.isHost && p.isOnline);
     if (nonHostPlayers.length < 3) {
-      throw new Error('At least 3 players are required to start The Imposter');
+      throw new Error('At least 3 online players are required to start The Imposter');
     }
 
+    // Generate unique session ID for isolation
+    this.sessionId = 'imp_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+    this.room.sessionId = this.sessionId;
     this.room.phase = 'playing';
     this.wordSelector.reset();
 
@@ -59,11 +79,14 @@ export class ImposterEngine {
     }
 
     this.initGameState();
+    console.log(`[ImposterEngine:${this.room.code}] Started fresh session ${this.sessionId} with ${nonHostPlayers.length} online players`);
     this.startRound(1);
   }
 
   private initGameState() {
     this.room.imposterState = {
+      sessionId: this.sessionId,
+      isAbandoned: false,
       currentRound: 0,
       totalRounds: this.settings.totalRounds,
       roundPhase: 'role-reveal',
@@ -96,8 +119,9 @@ export class ImposterEngine {
     this.tieBreakVotes.clear();
     this.currentImposterIds.clear();
 
-    const nonHostPlayers = this.room.players.filter(p => !p.isHost);
+    const nonHostPlayers = this.room.players.filter(p => !p.isHost && p.isOnline);
     if (nonHostPlayers.length < 3) {
+      console.warn(`[ImposterEngine:${this.room.code}] Fewer than 3 online players (${nonHostPlayers.length}). Ending game.`);
       this.endGame();
       return;
     }
@@ -552,7 +576,72 @@ export class ImposterEngine {
   }
 
   restartGame() {
+    this.stopTimer();
+    console.log(`[ImposterEngine:${this.room.code}] Restarting game from host...`);
+    const onlineNonHost = this.room.players.filter(p => !p.isHost && p.isOnline);
+    if (onlineNonHost.length < 3) {
+      console.log(`[ImposterEngine:${this.room.code}] Only ${onlineNonHost.length} online players during restart. Resetting to lobby.`);
+      this.forceReset('Restart requested, but fewer than 3 players are online. Resetting to lobby.');
+      return;
+    }
     this.startGame();
+  }
+
+  forceReset(reason = 'Host force reset the game session') {
+    console.log(`[ImposterEngine:${this.room.code}] Force-resetting session ${this.sessionId}. Reason: ${reason}`);
+    this.stopTimer();
+
+    // Invalidate active session
+    this.sessionId = null;
+    this.room.sessionId = null;
+    this.currentWord = null;
+    this.currentImposterIds.clear();
+    this.votes.clear();
+    this.tieBreakVotes.clear();
+    this.roundScored = false;
+    this.isTieBreak = false;
+
+    // Reset scores
+    for (const p of this.room.players) {
+      p.score = 0;
+    }
+
+    // Reset room phase to lobby
+    this.room.phase = 'lobby';
+
+    // Reset imposter state to clean lobby state
+    this.initGameState();
+    if (this.room.imposterState) {
+      this.room.imposterState.sessionId = null;
+      this.room.imposterState.currentRound = 0;
+      this.room.imposterState.roundPhase = 'role-reveal';
+      this.room.imposterState.isAbandoned = false;
+    }
+
+    // Notify all clients that session has been reset
+    this.io.to(this.room.code).emit('imposter:session-reset');
+    // Clear secret payload on all player clients
+    this.io.to(this.room.code).emit('imposter:secret', null);
+
+    this.broadcastState();
+    this.broadcastRoom();
+  }
+
+  markAbandoned() {
+    console.log(`[ImposterEngine:${this.room.code}] Host disconnected. Marking session as abandoned.`);
+    this.stopTimer();
+    if (this.room.imposterState) {
+      this.room.imposterState.isAbandoned = true;
+      this.broadcastState();
+    }
+  }
+
+  recoverFromAbandonment() {
+    console.log(`[ImposterEngine:${this.room.code}] Host returned. Recovering session.`);
+    if (this.room.imposterState) {
+      this.room.imposterState.isAbandoned = false;
+      this.broadcastState();
+    }
   }
 
   // ─── Reconnection ─────────────────────────────────────────────────────────
@@ -588,8 +677,14 @@ export class ImposterEngine {
       state.votedPlayerIds[vIdx] = newSocketId;
     }
 
-    // Resend private secret payload to returning player
-    if (this.currentWord && state.roundPhase !== 'round-end' && state.roundPhase !== 'game-end') {
+    // Resend private secret payload ONLY if there is an active session and active round!
+    if (
+      this.sessionId &&
+      this.currentWord &&
+      this.room.phase === 'playing' &&
+      state.roundPhase !== 'round-end' &&
+      state.roundPhase !== 'game-end'
+    ) {
       const isImposter = this.currentImposterIds.has(newSocketId);
       const otherImposters = this.room.players
         .filter(p => !p.isHost && p.id !== newSocketId && this.currentImposterIds.has(p.id))
@@ -604,6 +699,9 @@ export class ImposterEngine {
         secretManglish: isImposter ? undefined : this.currentWord.manglish,
       };
       this.io.to(newSocketId).emit('imposter:secret', payload);
+    } else {
+      // Clear secret on client if not in active round
+      this.io.to(newSocketId).emit('imposter:secret', null);
     }
 
     this.broadcastState();

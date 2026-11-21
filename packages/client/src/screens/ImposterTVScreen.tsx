@@ -40,6 +40,7 @@ export default function ImposterTVScreen({ hostIP }: Props) {
   const navigate = useNavigate();
   const { room, imposterState, timerRemaining, connected } = useGameStore();
 
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [settings, setSettings] = useState<ImposterSettings>({
     totalRounds: room?.imposterSettings?.totalRounds ?? 5,
     imposterCount: room?.imposterSettings?.imposterCount ?? 1,
@@ -66,22 +67,28 @@ export default function ImposterTVScreen({ hostIP }: Props) {
   }
 
   function handleNextClue() {
-    getSocket().emit('imposter:next-clue');
+    getSocket().emit('imposter:next-clue', { sessionId: imposterState?.sessionId ?? undefined });
   }
 
   function handleEndDiscussion() {
-    getSocket().emit('imposter:end-discussion');
+    getSocket().emit('imposter:end-discussion', { sessionId: imposterState?.sessionId ?? undefined });
   }
 
   function handleNextRound() {
-    getSocket().emit('imposter:next-round');
+    getSocket().emit('imposter:next-round', { sessionId: imposterState?.sessionId ?? undefined });
   }
 
   function handleRestart() {
     getSocket().emit('imposter:restart-game');
   }
 
+  function handleForceReset() {
+    getSocket().emit('imposter:force-reset');
+    setShowResetConfirm(false);
+  }
+
   function handleHome() {
+    sessionStorage.removeItem('chitram_tv_host');
     getSocket().emit('room:leave');
     useGameStore.getState().reset();
     navigate('/');
@@ -130,6 +137,14 @@ export default function ImposterTVScreen({ hostIP }: Props) {
           </div>
 
           <div className="flex items-center gap-4">
+            <button
+              onClick={() => setShowResetConfirm(true)}
+              className="text-xs bg-red-950/60 hover:bg-red-900 border border-red-500/40 text-red-300 hover:text-white px-3.5 py-2 rounded-xl transition-all font-bold flex items-center gap-1.5"
+              title="Force reset room to clean lobby state"
+            >
+              <span>⚠️</span>
+              <span>Force Reset Session</span>
+            </button>
             <div className="bg-white/5 border border-white/10 px-4 py-1.5 rounded-full flex items-center gap-2">
               <span className={`w-2.5 h-2.5 rounded-full ${connected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
               <span className="text-white/80 text-sm font-semibold">{players.length} Players</span>
@@ -139,6 +154,22 @@ export default function ImposterTVScreen({ hostIP }: Props) {
             </div>
           </div>
         </div>
+
+        {/* Abandoned session alert banner */}
+        {imposterState?.isAbandoned && (
+          <div className="mx-10 mb-3 p-3 bg-red-950/80 border border-red-500/60 rounded-2xl flex items-center justify-between gap-4 animate-pulse text-xs text-red-200">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">⚠️</span>
+              <span><strong>Session Interrupted:</strong> The previous game session was interrupted. You can start fresh or force reset to a clean lobby.</span>
+            </div>
+            <button
+              onClick={handleForceReset}
+              className="bg-red-600 hover:bg-red-500 text-white font-bold px-3 py-1.5 rounded-lg whitespace-nowrap shadow-md"
+            >
+              Force Reset to Clean Lobby
+            </button>
+          </div>
+        )}
 
         {/* Main Content Area */}
         <div className="flex-1 flex gap-6 px-10 pb-6 min-h-0 items-stretch">
@@ -353,6 +384,9 @@ export default function ImposterTVScreen({ hostIP }: Props) {
           <button onClick={handleRestart} className="btn-primary bg-red-600 hover:bg-red-500 text-white font-black text-base py-3 px-10 shadow-lg">
             🔄 Rematch / വീണ്ടും കളിക്കാം
           </button>
+          <button onClick={() => setShowResetConfirm(true)} className="btn-secondary text-base py-3 px-6 text-red-300 hover:text-white border-red-500/40">
+            ⚠️ Force Reset
+          </button>
         </div>
       </div>
     );
@@ -362,7 +396,7 @@ export default function ImposterTVScreen({ hostIP }: Props) {
   // VIEW 3: IN-GAME ACTIVE PHASES
   // ──────────────────────────────────────────────────────────────────────────
   return (
-    <div className="h-full flex flex-col bg-gray-950 select-none overflow-hidden">
+    <div className="h-full flex flex-col bg-gray-950 select-none overflow-hidden relative">
 
       {/* ── Top Header Bar ─────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-10 py-3 border-b border-white/10 shrink-0 bg-gray-900/80 backdrop-blur-md">
@@ -391,9 +425,25 @@ export default function ImposterTVScreen({ hostIP }: Props) {
           <Timer remaining={timerRemaining} total={60} large />
         </div>
 
-        {/* Right: Room code */}
-        <div className="bg-red-500/20 border border-red-500/40 px-3 py-1 rounded-xl font-mono font-bold text-red-300 text-sm">
-          {room.code}
+        {/* Right: Room code & Action Controls */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleRestart}
+            className="text-xs bg-white/10 hover:bg-white/20 text-white font-bold px-3 py-1.5 rounded-xl transition-all flex items-center gap-1 shadow-sm"
+            title="Restart game from Round 1"
+          >
+            <span>🔄</span> <span>Restart</span>
+          </button>
+          <button
+            onClick={() => setShowResetConfirm(true)}
+            className="text-xs bg-red-600/30 hover:bg-red-600 border border-red-500/50 text-red-200 hover:text-white font-bold px-3 py-1.5 rounded-xl transition-all flex items-center gap-1 shadow-sm"
+            title="Force reset session back to lobby"
+          >
+            <span>⚠️</span> <span>Force Reset</span>
+          </button>
+          <div className="bg-red-500/20 border border-red-500/40 px-3 py-1 rounded-xl font-mono font-bold text-red-300 text-sm">
+            {room.code}
+          </div>
         </div>
       </div>
 
@@ -637,6 +687,39 @@ export default function ImposterTVScreen({ hostIP }: Props) {
         )}
 
       </div>
+
+      {/* Force Reset Confirmation Modal */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-[#1a0f1e] border-2 border-red-500/50 rounded-3xl p-8 max-w-lg w-full text-center shadow-2xl space-y-6">
+            <div className="text-6xl">⚠️</div>
+            <div>
+              <h3 className="text-3xl font-black text-white">Force Reset Session?</h3>
+              <p className="text-red-400 font-bold mt-1">ഈ സെഷൻ റീസെറ്റ് ചെയ്യണോ?</p>
+            </div>
+            <div className="bg-red-950/40 border border-red-500/30 rounded-2xl p-4 text-left text-sm text-white/80 space-y-2">
+              <p>• Terminates the current stuck or active game immediately.</p>
+              <p>• Stops all active timers, clears stale voting, roles, and words.</p>
+              <p>• Returns everyone to a fresh, clean lobby in this room ({room.code}).</p>
+              <p>• Room code and joined players are preserved.</p>
+            </div>
+            <div className="flex gap-4">
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                className="flex-1 btn-secondary py-3 text-base font-bold bg-white/10 hover:bg-white/20 text-white rounded-xl"
+              >
+                Cancel / വേണ്ട
+              </button>
+              <button
+                onClick={handleForceReset}
+                className="flex-1 btn-primary py-3 text-base font-black bg-red-600 hover:bg-red-500 text-white rounded-xl shadow-lg shadow-red-900/50"
+              >
+                Yes, Force Reset
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

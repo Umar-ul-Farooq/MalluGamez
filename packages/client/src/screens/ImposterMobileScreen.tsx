@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { getSocket } from '../lib/socket';
 import { useGameStore, selectMyPlayer } from '../store/gameStore';
 import Timer from '../components/Timer';
@@ -17,6 +17,13 @@ export default function ImposterMobileScreen() {
   const [wordGuessInput, setWordGuessInput] = useState('');
   const [guessSubmitted, setGuessSubmitted] = useState(false);
 
+  // Clear component state whenever round, phase, or session changes
+  useEffect(() => {
+    setSelectedCandidateId(null);
+    setWordGuessInput('');
+    setGuessSubmitted(false);
+  }, [imposterState?.sessionId, imposterState?.currentRound, imposterState?.roundPhase]);
+
   if (!room) return null;
 
   const isImposter = imposterSecret?.isImposter ?? false;
@@ -24,20 +31,20 @@ export default function ImposterMobileScreen() {
   const isCaughtImposter = imposterState?.caughtImposterId === myPlayer?.id;
 
   function handleNextClue() {
-    getSocket().emit('imposter:next-clue');
+    getSocket().emit('imposter:next-clue', { sessionId: imposterState?.sessionId ?? undefined });
   }
 
   function handleVote(candidateId: string) {
     if (hasVotedImposter) return;
     setSelectedCandidateId(candidateId);
-    getSocket().emit('imposter:vote', { candidateId });
+    getSocket().emit('imposter:vote', { candidateId, sessionId: imposterState?.sessionId ?? undefined });
   }
 
   function handleGuessSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!wordGuessInput.trim() || guessSubmitted) return;
     setGuessSubmitted(true);
-    getSocket().emit('imposter:submit-word-guess', { guess: wordGuessInput.trim() });
+    getSocket().emit('imposter:submit-word-guess', { guess: wordGuessInput.trim(), sessionId: imposterState?.sessionId ?? undefined });
   }
 
   // ──────────────────────────────────────────────────────────────────────────

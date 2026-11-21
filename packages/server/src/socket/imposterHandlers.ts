@@ -105,21 +105,6 @@ export function registerImposterHandlers(io: GameServer, socket: GameSocket, rm:
     }
   });
 
-  // Caught imposter submits final secret word guess
-  socket.on('imposter:submit-word-guess', ({ guess, sessionId }) => {
-    try {
-      const room = rm.getRoomByPlayer(socket.id);
-      if (!room || room.gameType !== 'imposter') return;
-
-      const engine = rm.getImposterEngine(room.code);
-      if (!engine || !engine.validateSession(sessionId)) return;
-
-      engine.submitWordGuess(socket.id, guess);
-    } catch (err: any) {
-      socket.emit('room:error', err.message);
-    }
-  });
-
   // Host advances to next round
   socket.on('imposter:next-round', (payload) => {
     try {

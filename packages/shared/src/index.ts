@@ -152,7 +152,6 @@ export type ImposterRoundPhase =
   | 'discussion'    // verbal discussion countdown
   | 'voting'        // private voting on phone
   | 'tie-break'     // second vote if top candidates tied
-  | 'imposter-guess'// caught imposter's final chance to guess the secret word
   | 'round-end'     // outcome reveal, role reveals, score updates
   | 'game-end';     // final podium
 
@@ -175,8 +174,6 @@ export interface ImposterPublicState {
   eliminatedPlayerWasImposter?: boolean;
   caughtImposterId?: string | null;
   caughtImposterName?: string | null;
-  imposterFinalGuess?: string | null;
-  imposterGuessCorrect?: boolean | null;
   revealedWord?: {
     word: string;
     manglish: string;
@@ -188,10 +185,6 @@ export interface ImposterPublicState {
     reason: string;
     eliminatedPlayerName: string;
     wasImposter: boolean;
-    imposterGuess?: {
-      guess: string;
-      correct: boolean;
-    };
     pointsAwarded: Record<string, number>; // playerId -> points earned this round
   } | null;
 }
@@ -292,7 +285,6 @@ export interface ClientToServerEvents {
   'imposter:next-clue': (payload?: { sessionId?: string }) => void; // active clue giver or host
   'imposter:end-discussion': (payload?: { sessionId?: string }) => void; // host only
   'imposter:vote': (payload: { candidateId: string; sessionId?: string }) => void; // player votes
-  'imposter:submit-word-guess': (payload: { guess: string; sessionId?: string }) => void; // caught imposter guesses word
   'imposter:next-round': (payload?: { sessionId?: string }) => void; // host advances round
   'imposter:restart-game': () => void; // host restarts
   'imposter:force-reset': () => void; // host force-resets session to clean lobby

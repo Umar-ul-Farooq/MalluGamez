@@ -588,34 +588,7 @@ export default function ImposterTVScreen({ hostIP }: Props) {
           </div>
         )}
 
-        {/* 5. IMPOSTER FINAL GUESS PHASE */}
-        {imposterState.roundPhase === 'imposter-guess' && (
-          <div className="space-y-8 max-w-3xl animate-fade-in">
-            <div className="text-8xl">🚨</div>
-            <div>
-              <div className="inline-block bg-red-600 text-white text-xs font-black uppercase tracking-widest px-4 py-1.5 rounded-full mb-3 shadow-lg">
-                IMPOSTER CAUGHT! / ചതിയനെ പിടികൂടി!
-              </div>
-              <h2 className="text-6xl font-black text-white tracking-tight">
-                {imposterState.caughtImposterName} was the Imposter!
-              </h2>
-              <p className="ml-text text-3xl font-extrabold text-amber-300 mt-2">
-                ചതിയന് വാക്ക് ഊഹിക്കാൻ ഒരു അവസരം കൂടി!
-              </p>
-            </div>
-
-            <div className="card bg-red-950/40 border-2 border-red-500/40 py-8 px-12 rounded-3xl shadow-2xl animate-pulse">
-              <p className="text-white/80 text-xl font-bold">
-                {imposterState.caughtImposterName} is guessing the secret word on their phone…
-              </p>
-              <p className="text-white/50 text-xs mt-2">
-                If the imposter guesses correctly, they steal the win!
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* 6. ROUND-END PHASE */}
+        {/* 5. ROUND-END PHASE */}
         {imposterState.roundPhase === 'round-end' && imposterState.roundResult && (
           <div className="space-y-6 max-w-3xl animate-bounce-in">
             <div className="text-7xl">
@@ -648,12 +621,6 @@ export default function ImposterTVScreen({ hostIP }: Props) {
                 <h3 className="text-2xl font-black text-white mt-1">
                   {imposterState.imposterIds?.map(id => room.players.find(p => p.id === id)?.name).join(', ')}
                 </h3>
-                {imposterState.roundResult.imposterGuess && (
-                  <p className="text-xs text-white/50 mt-1">
-                    Guess: &quot;{imposterState.roundResult.imposterGuess.guess}&quot;{' '}
-                    ({imposterState.roundResult.imposterGuess.correct ? '✅ Correct' : '❌ Wrong'})
-                  </p>
-                )}
               </div>
             </div>
 
@@ -677,12 +644,21 @@ export default function ImposterTVScreen({ hostIP }: Props) {
               </div>
             </div>
 
-            <button
-              onClick={handleNextRound}
-              className="btn-primary bg-red-600 hover:bg-red-500 text-white font-black text-base py-3.5 px-10 shadow-xl rounded-2xl"
-            >
-              ⏭️ Next Round / അടുത്ത റൗണ്ട്
-            </button>
+            <div className="flex flex-col items-center gap-2">
+              <button
+                onClick={handleNextRound}
+                className="btn-primary bg-red-600 hover:bg-red-500 text-white font-black text-base py-3.5 px-10 shadow-xl rounded-2xl"
+              >
+                {imposterState.currentRound >= imposterState.totalRounds
+                  ? '🏆 View Final Results / ഫലം കാണുക'
+                  : '⏭️ Next Round / അടുത്ത റൗണ്ട്'}
+              </button>
+              {timerRemaining > 0 && (
+                <p className="text-white/40 text-xs">
+                  Auto-advancing in {timerRemaining}s…
+                </p>
+              )}
+            </div>
           </div>
         )}
 

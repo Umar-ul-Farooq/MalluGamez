@@ -14,21 +14,16 @@ export default function ImposterMobileScreen() {
 
   const myPlayer = useGameStore(selectMyPlayer);
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
-  const [wordGuessInput, setWordGuessInput] = useState('');
-  const [guessSubmitted, setGuessSubmitted] = useState(false);
 
-  // Clear component state whenever round, phase, or session changes
+  // Clear vote selection whenever the round or session changes
   useEffect(() => {
     setSelectedCandidateId(null);
-    setWordGuessInput('');
-    setGuessSubmitted(false);
   }, [imposterState?.sessionId, imposterState?.currentRound, imposterState?.roundPhase]);
 
   if (!room) return null;
 
   const isImposter = imposterSecret?.isImposter ?? false;
   const isMyClueTurn = imposterState?.currentCluePlayerId === myPlayer?.id;
-  const isCaughtImposter = imposterState?.caughtImposterId === myPlayer?.id;
 
   function handleNextClue() {
     getSocket().emit('imposter:next-clue', { sessionId: imposterState?.sessionId ?? undefined });
@@ -38,13 +33,6 @@ export default function ImposterMobileScreen() {
     if (hasVotedImposter) return;
     setSelectedCandidateId(candidateId);
     getSocket().emit('imposter:vote', { candidateId, sessionId: imposterState?.sessionId ?? undefined });
-  }
-
-  function handleGuessSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!wordGuessInput.trim() || guessSubmitted) return;
-    setGuessSubmitted(true);
-    getSocket().emit('imposter:submit-word-guess', { guess: wordGuessInput.trim(), sessionId: imposterState?.sessionId ?? undefined });
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -288,52 +276,7 @@ export default function ImposterMobileScreen() {
         </div>
       )}
 
-      {/* ── PHASE 5: IMPOSTER FINAL GUESS ──────────────────────────────────── */}
-      {imposterState.roundPhase === 'imposter-guess' && (
-        <div className="my-auto flex flex-col items-center text-center gap-5 animate-fade-in w-full">
-          {isCaughtImposter ? (
-            <div className="card w-full bg-red-950/60 border-2 border-red-500 p-6 rounded-3xl shadow-2xl space-y-3">
-              <span className="text-5xl animate-bounce block">🎯</span>
-              <h3 className="text-2xl font-black text-white">YOU WERE CAUGHT!</h3>
-              <p className="ml-text text-amber-300 text-sm font-bold">
-                രഹസ്യ വാക്ക് ഊഹിച്ചാൽ നിങ്ങൾക്ക് വിജയിക്കാം!
-              </p>
-              <p className="text-white/70 text-xs">
-                Guess the secret word below to steal the victory (+5 pts):
-              </p>
-
-              <form onSubmit={handleGuessSubmit} className="space-y-3 pt-2">
-                <input
-                  type="text"
-                  value={wordGuessInput}
-                  onChange={e => setWordGuessInput(e.target.value)}
-                  placeholder="Type secret word (Malayalam or Manglish)…"
-                  disabled={guessSubmitted}
-                  className="input-field text-center text-lg w-full"
-                  autoFocus
-                />
-                <button
-                  type="submit"
-                  disabled={!wordGuessInput.trim() || guessSubmitted}
-                  className="btn-primary w-full py-3 bg-red-600 hover:bg-red-500 text-white font-black rounded-xl shadow-lg"
-                >
-                  {guessSubmitted ? 'Submitted!' : 'Submit Final Guess / അയക്കൂ'}
-                </button>
-              </form>
-            </div>
-          ) : (
-            <div className="card w-full bg-white/5 border border-white/10 p-6 rounded-3xl space-y-2">
-              <span className="text-4xl block">⏳</span>
-              <h3 className="text-xl font-black text-white">Imposter Was Caught!</h3>
-              <p className="text-white/60 text-xs">
-                {imposterState.caughtImposterName} is currently submitting their final guess on their phone…
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── PHASE 6: ROUND END ─────────────────────────────────────────────── */}
+      {/* ── PHASE 5: ROUND END ─────────────────────────────────────────────── */}
       {imposterState.roundPhase === 'round-end' && imposterState.roundResult && (
         <div className="my-auto flex flex-col items-center text-center gap-4 animate-bounce-in w-full">
           <div className="text-5xl">

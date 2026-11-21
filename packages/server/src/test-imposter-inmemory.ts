@@ -38,7 +38,7 @@ async function runTestSuite() {
   console.log('================================================================\n');
 
   let passed = 0;
-  const total = 7;
+  const total = 8;
 
   // ──────────────────────────────────────────────────────────────────────────
   // TEST 1: Session Interruption & Fresh Start
@@ -73,6 +73,7 @@ async function runTestSuite() {
 
     // Progress through rounds to Round 4
     for (let r = 2; r <= 4; r++) {
+      room.imposterState!.roundPhase = 'round-end';
       engine.nextRound();
       assert(room.imposterState?.currentRound === r, `Should advance to round ${r}`);
     }
@@ -395,6 +396,106 @@ async function runTestSuite() {
     passed++;
   } catch (err) {
     console.error('❌ TEST 7 FAILED:', err);
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // TEST 8: Imposter Caught Ends Round Immediately (No Final Guess, Edge Cases)
+  // ──────────────────────────────────────────────────────────────────────────
+  try {
+    console.log('▶ TEST 8: Immediate Round End & No Imposter Final Guess Option');
+    const mockIO = createMockIO();
+    const rm = new RoomManager();
+
+    const { room } = rm.createRoom('tv-sock-8', 'TV Host', 'imposter');
+    const code = room.code;
+    rm.joinRoom('p1', code, 'Alice');
+    rm.joinRoom('p2', code, 'Bob');
+    rm.joinRoom('p3', code, 'Charlie');
+
+    const engine = rm.ensureImposterEngine(code, mockIO);
+    engine.updateSettings({ totalRounds: 5 });
+    engine.startGame();
+
+    // ── Edge Case 1: Imposter identified in Round 1 of 5 ──
+    assert(room.imposterState?.currentRound === 1, 'Should start at Round 1');
+
+    // Find who the imposter is in round 1
+    const imposterId = (engine as any).currentImposterIds.values().next().value;
+    const innocentIds = ['p1', 'p2', 'p3'].filter(id => id !== imposterId);
+
+    // Vote for the imposter
+    engine.startVotingPhase();
+    assert(room.imposterState?.roundPhase === 'voting', 'Should be voting phase');
+
+    engine.vote(innocentIds[0], imposterId);
+    engine.vote(innocentIds[1], imposterId);
+    engine.vote(imposterId, innocentIds[0]); // Imposter votes for innocent
+
+    // The round must END IMMEDIATELY in 'round-end', NOT 'imposter-guess'!
+    assert(room.imposterState?.roundPhase === 'round-end', 'Round must immediately be round-end when imposter is caught');
+    assert((room.imposterState?.roundPhase as any) !== 'imposter-guess', 'Must NOT enter imposter-guess phase');
+    assert(room.imposterState?.caughtImposterId === imposterId, 'Caught imposter ID must be set');
+    assert(room.imposterState?.roundResult?.winner === 'normal', 'Normal players must win when imposter is caught');
+
+    // Verify scoring: innocent players got 2 (win) + 1 (voted imposter) = 3; imposter got 0
+    const pointsAwarded = room.imposterState?.roundResult?.pointsAwarded!;
+    assert(pointsAwarded[innocentIds[0]] === 3, 'Innocent voter 1 should get 3 points');
+    assert(pointsAwarded[innocentIds[1]] === 3, 'Innocent voter 2 should get 3 points');
+    assert(pointsAwarded[imposterId] === 0, 'Caught imposter should get 0 points without guess option');
+
+    // Verify submitWordGuess does not exist on engine
+    assert(typeof (engine as any).submitWordGuess === 'undefined', 'submitWordGuess must be removed');
+
+    // Advance to Round 2
+    engine.nextRound();
+    assert(room.imposterState?.currentRound === 2, 'Must proceed to Round 2 of 5');
+    assert(room.imposterState?.roundPhase === 'role-reveal', 'Round 2 must start with role-reveal');
+    console.log('  ✓ Round 1 imposter caught: immediately ended round, no guess phase, correct scores, advanced to Round 2');
+
+    // Duplicate call to nextRound() during active phase must be ignored
+    engine.nextRound();
+    assert(room.imposterState?.currentRound === 2, 'Duplicate nextRound must not advance mid-round');
+    console.log('  ✓ Duplicate nextRound calls safely ignored');
+
+    // ── Edge Case 2: Round 4 of 5 ──
+    // Simulate advancing to round 4
+    room.imposterState!.currentRound = 4;
+    room.imposterState!.roundPhase = 'voting';
+    const round4Imp = (engine as any).currentImposterIds.values().next().value;
+    const round4Innocents = ['p1', 'p2', 'p3'].filter(id => id !== round4Imp);
+
+    engine.vote(round4Innocents[0], round4Imp);
+    engine.vote(round4Innocents[1], round4Imp);
+    engine.vote(round4Imp, round4Innocents[0]);
+
+    assert((engine.getPublicState().roundPhase as string) === 'round-end', 'Round 4 must end immediately');
+    engine.nextRound();
+    assert(room.imposterState?.currentRound === 5, 'Must proceed to Round 5 of 5');
+    console.log('  ✓ Round 4 imposter caught: immediately proceeded to Round 5');
+
+    // ── Edge Case 3: Final Round (Round 5 of 5) ──
+    assert(room.imposterState?.currentRound === 5, 'Current round is 5');
+    room.imposterState!.roundPhase = 'voting';
+    const round5Imp = (engine as any).currentImposterIds.values().next().value;
+    const round5Innocents = ['p1', 'p2', 'p3'].filter(id => id !== round5Imp);
+
+    engine.vote(round5Innocents[0], round5Imp);
+    engine.vote(round5Innocents[1], round5Imp);
+    engine.vote(round5Imp, round5Innocents[0]);
+
+    assert((engine.getPublicState().roundPhase as string) === 'round-end', 'Final round must end immediately');
+
+    // Next round on final round must end the entire game
+    engine.nextRound();
+    assert((engine.getPublicState().roundPhase as string) === 'game-end', 'Final round nextRound must transition to game-end');
+    assert(room.phase === 'game-end', 'Room phase must be game-end');
+    console.log('  ✓ Final round imposter caught: immediately ended the game and displayed final results');
+
+    engine.forceReset();
+    console.log('✅ TEST 8 PASSED\n');
+    passed++;
+  } catch (err) {
+    console.error('❌ TEST 8 FAILED:', err);
   }
 
   console.log('================================================================');

@@ -103,8 +103,6 @@ export class ImposterEngine {
       eliminatedPlayerWasImposter: false,
       caughtImposterId: null,
       caughtImposterName: null,
-      imposterFinalGuess: null,
-      imposterGuessCorrect: null,
       revealedWord: null,
       imposterIds: [],
       roundResult: null,
@@ -158,8 +156,6 @@ export class ImposterEngine {
     state.eliminatedPlayerWasImposter = false;
     state.caughtImposterId = null;
     state.caughtImposterName = null;
-    state.imposterFinalGuess = null;
-    state.imposterGuessCorrect = null;
     state.revealedWord = null;
     state.imposterIds = [];
     state.roundResult = null;
@@ -381,90 +377,29 @@ export class ImposterEngine {
       // Normal player was eliminated — Imposter team wins!
       this.handleInnocentEliminated(eliminatedName);
     } else {
-      // Imposter caught!
+      // Imposter caught! Immediately end the round — normal players win.
       state.caughtImposterId = eliminatedId;
       state.caughtImposterName = eliminatedName;
-      this.startImposterGuessPhase(eliminatedId, eliminatedName);
+      this.handleImposterCaught(eliminatedName);
     }
-  }
-
-  // ─── Phase 4: Imposter Final Guess ────────────────────────────────────────
-
-  private startImposterGuessPhase(imposterId: string, imposterName: string) {
-    this.stopTimer();
-    const state = this.room.imposterState!;
-    state.roundPhase = 'imposter-guess';
-    state.caughtImposterId = imposterId;
-    state.caughtImposterName = imposterName;
-
-    this.broadcastState();
-
-    // Imposter gets 30 seconds to submit their guess
-    this.startTimer(30, () => {
-      this.resolveImposterGuess(imposterId, null);
-    });
-  }
-
-  submitWordGuess(imposterId: string, guess: string) {
-    const state = this.room.imposterState;
-    if (!state || state.roundPhase !== 'imposter-guess') return;
-    if (state.caughtImposterId !== imposterId) return;
-
-    this.resolveImposterGuess(imposterId, guess);
-  }
-
-  private resolveImposterGuess(imposterId: string, guess: string | null) {
-    this.stopTimer();
-    const state = this.room.imposterState!;
-    const cleanGuess = (guess || '').trim();
-
-    const isCorrect = this.checkWordMatch(cleanGuess);
-    state.imposterFinalGuess = cleanGuess || '(No guess)';
-    state.imposterGuessCorrect = isCorrect;
-
-    // Calculate score & awards
-    this.awardRoundPoints(isCorrect ? 'imposter' : 'normal', isCorrect, imposterId);
-  }
-
-  private checkWordMatch(guess: string): boolean {
-    if (!this.currentWord || !guess) return false;
-
-    const normalize = (str: string) =>
-      str.toLowerCase().replace(/[\s\-_'".]/g, '').trim();
-
-    const targetNormalized = normalize(this.currentWord.word);
-    const manglishNormalized = normalize(this.currentWord.manglish);
-    const guessNormalized = normalize(guess);
-
-    if (guessNormalized === targetNormalized || guessNormalized === manglishNormalized) {
-      return true;
-    }
-
-    if (this.currentWord.aliases) {
-      for (const alias of this.currentWord.aliases) {
-        if (guessNormalized === normalize(alias)) {
-          return true;
-        }
-      }
-    }
-
-    return false;
   }
 
   // ─── Scoring & Outcomes ───────────────────────────────────────────────────
 
+  private handleImposterCaught(imposterName: string) {
+    this.awardRoundPoints('normal', `${imposterName} was the Imposter and was caught!`);
+  }
+
   private handleInnocentEliminated(eliminatedName: string) {
-    this.awardRoundPoints('imposter', false, null, `${eliminatedName} was innocent! The imposter wins.`);
+    this.awardRoundPoints('imposter', `${eliminatedName} was innocent! The imposter wins.`);
   }
 
   private finishRoundWithoutElimination(reason: string) {
-    this.awardRoundPoints('imposter', false, null, reason);
+    this.awardRoundPoints('imposter', reason);
   }
 
   private awardRoundPoints(
     winner: 'normal' | 'imposter',
-    imposterGuessedWord: boolean,
-    caughtImposterId: string | null,
     customReason?: string,
   ) {
     if (this.roundScored) return;
@@ -480,30 +415,25 @@ export class ImposterEngine {
 
     // 1. Team win points
     if (winner === 'normal') {
-      // Normal players receive 2 points
+      // Normal players receive 2 points each
       for (const p of this.room.players) {
         if (!p.isHost && !this.currentImposterIds.has(p.id)) {
           pointsAwarded[p.id] = (pointsAwarded[p.id] || 0) + 2;
         }
       }
     } else {
-      // Imposter(s) receive 3 points
+      // Imposter(s) receive 3 points each
       for (const impId of this.currentImposterIds) {
         pointsAwarded[impId] = (pointsAwarded[impId] || 0) + 3;
       }
     }
 
-    // 2. Voting bonus: Each normal player who voted for an imposter correctly gets +1 pt
+    // 2. Voting bonus: each normal player who correctly voted for an imposter gets +1 pt
     const voteMap = this.isTieBreak ? this.tieBreakVotes : this.votes;
     for (const [voterId, candidateId] of voteMap.entries()) {
       if (!this.currentImposterIds.has(voterId) && this.currentImposterIds.has(candidateId)) {
         pointsAwarded[voterId] = (pointsAwarded[voterId] || 0) + 1;
       }
-    }
-
-    // 3. Imposter correct word guess bonus: +2 pts
-    if (imposterGuessedWord && caughtImposterId) {
-      pointsAwarded[caughtImposterId] = (pointsAwarded[caughtImposterId] || 0) + 2;
     }
 
     // Apply points to player entities
@@ -526,38 +456,35 @@ export class ImposterEngine {
       .map(p => p.name)
       .join(', ');
 
-    let reason = customReason ?? '';
-    if (!reason) {
-      if (winner === 'normal') {
-        reason = `Imposter (${imposterNames}) was caught and failed to guess the secret word!`;
-      } else if (imposterGuessedWord) {
-        reason = `Imposter (${imposterNames}) was caught but correctly guessed the secret word!`;
-      } else {
-        reason = `Imposter (${imposterNames}) successfully fooled the players!`;
-      }
-    }
+    const reason = customReason ?? (
+      winner === 'normal'
+        ? `${imposterNames} was the Imposter and was caught!`
+        : `Imposter (${imposterNames}) successfully fooled the players!`
+    );
 
     state.roundResult = {
       winner,
       reason,
       eliminatedPlayerName: state.eliminatedPlayerName || 'None',
       wasImposter: state.eliminatedPlayerWasImposter || false,
-      imposterGuess: state.imposterFinalGuess ? {
-        guess: state.imposterFinalGuess,
-        correct: state.imposterGuessCorrect || false,
-      } : undefined,
       pointsAwarded,
     };
 
     this.broadcastState();
     this.broadcastRoom();
+
+    // Auto-advance to next round or game-end after 7 seconds (or host clicks Next Round)
+    this.startTimer(7, () => {
+      this.nextRound();
+    });
   }
 
   // ─── Advancement ──────────────────────────────────────────────────────────
 
   nextRound() {
+    this.stopTimer();
     const state = this.room.imposterState;
-    if (!state) return;
+    if (!state || state.roundPhase !== 'round-end') return;
 
     if (state.currentRound >= state.totalRounds) {
       this.endGame();

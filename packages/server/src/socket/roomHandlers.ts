@@ -106,7 +106,7 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rm: Roo
         return;
       }
       leaveOtherRooms(socket);
-      const { room } = rm.joinRoom(socket.id, roomCode.toUpperCase(), playerName);
+      const { room, player } = rm.joinRoom(socket.id, roomCode.toUpperCase(), playerName);
       socket.join(room.code);
       socket.emit('room:joined', rm.publicState(room.code));
       io.to(room.code).emit('room:updated', rm.publicState(room.code));
@@ -125,6 +125,9 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rm: Roo
       if (room.gameType === 'draw-identify') {
         const engine = rm.ensureDrawIdentifyEngine(room.code, io);
         socket.emit('draw-identify:state', engine.getPublicState());
+        if (room.phase === 'playing') {
+          engine.handlePlayerReconnect(socket.id, socket.id, player);
+        }
       }
       if (room.gameType === 'fastest-finger') {
         const engine = rm.ensureFastestFingerEngine(room.code, io);

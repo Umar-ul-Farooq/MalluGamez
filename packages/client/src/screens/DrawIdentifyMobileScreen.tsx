@@ -19,6 +19,66 @@ export default function DrawIdentifyMobileScreen() {
   const MAX_DRAWING_SECONDS = 60;
   const DEFAULT_DRAWING_SECONDS = 15;
 
+  const activeMyId = myId || getSocket().id || '';
+  const isDrawer = Boolean(
+    room &&
+    room.phase !== 'lobby' &&
+    drawIdentifyState &&
+    activeMyId === drawIdentifyState.currentDrawerId
+  );
+  const roundPhase = drawIdentifyState?.roundPhase ?? 'drawing';
+  const roundId = drawIdentifyState?.roundId ?? '';
+
+  // Reset local drawing counter when round changes (always called unconditionally before any early return)
+  useEffect(() => {
+    if (!roundId) return;
+    setLocalDrawnCount(0);
+    setHasDrawnSomething(false);
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        const rect = canvas.getBoundingClientRect();
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, rect.width || canvas.width, rect.height || canvas.height);
+      }
+    }
+  }, [roundId]);
+
+  // Sync canvas size to container (always called unconditionally before any early return)
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || room?.phase === 'lobby' || roundPhase !== 'drawing' || !isDrawer) return;
+
+    const resize = () => {
+      const rect = canvas.parentElement?.getBoundingClientRect();
+      if (rect && rect.width > 0 && rect.height > 0) {
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        canvas.style.width = `${rect.width}px`;
+        canvas.style.height = `${rect.height}px`;
+
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.scale(dpr, dpr);
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, rect.width, rect.height);
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+        }
+      }
+    };
+
+    resize();
+    const rafId = requestAnimationFrame(resize);
+    window.addEventListener('resize', resize);
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', resize);
+    };
+  }, [room?.phase, roundPhase, isDrawer, roundId]);
+
   if (!room || room.phase === 'lobby' || !drawIdentifyState) {
     const settings = room?.drawIdentifySettings ?? {
       objectCount: 12,
@@ -107,45 +167,48 @@ export default function DrawIdentifyMobileScreen() {
     );
   }
 
-  const isDrawer = myId === drawIdentifyState.currentDrawerId;
   const isOpposingPlayer = !isDrawer;
-  const { roundPhase, objectCount, currentDrawerName, roundId, identifiedCount, roundScore } = drawIdentifyState;
+  const { objectCount, currentDrawerName, identifiedCount, roundScore } = drawIdentifyState;
 
-  // Reset local drawing counter when round changes
-  useEffect(() => {
-    setLocalDrawnCount(0);
-    clearCanvas();
-  }, [roundId]);
+  if (room.phase === 'game-end' || roundPhase === 'game-end') {
+    const sorted = [...room.players.filter(p => !p.isHost)].sort((a, b) => b.score - a.score);
+    const myRank = sorted.findIndex(p => p.id === activeMyId) + 1;
+    const myPlayer = room.players.find(p => p.id === activeMyId);
+    return (
+      <div className="h-full flex flex-col p-6 bg-gradient-to-b from-gray-950 via-teal-950/30 to-gray-950 text-white select-none overflow-y-auto">
+        <div className="text-center space-y-2 pt-2 mb-6">
+          <div className="text-5xl">🏆</div>
+          <h2 className="text-2xl font-black text-white">Challenge Complete!</h2>
+          <p className="text-teal-300 font-bold text-sm">
+            Rank #{myRank > 0 ? myRank : '—'} • {myPlayer?.score ?? 0} pts
+          </p>
+        </div>
 
-  // Sync canvas size to container
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+        <div className="flex-1 space-y-2.5 max-w-sm w-full mx-auto">
+          {sorted.map((p, idx) => (
+            <div
+              key={p.id}
+              className={`flex items-center justify-between p-3.5 rounded-2xl border ${
+                p.id === activeMyId
+                  ? 'bg-teal-600/30 border-teal-400 text-white font-bold'
+                  : 'bg-white/5 border-white/10 text-white/85'
+              }`}
+            >
+              <div className="flex items-center gap-3 truncate">
+                <span className="text-lg">{['🥇', '🥈', '🥉'][idx] ?? `#${idx + 1}`}</span>
+                <span className="text-sm truncate">{p.name}{p.id === activeMyId ? ' (You)' : ''}</span>
+              </div>
+              <span className="text-base font-black text-teal-300 tabular-nums">{p.score} pts</span>
+            </div>
+          ))}
+        </div>
 
-    const resize = () => {
-      const rect = canvas.parentElement?.getBoundingClientRect();
-      if (rect) {
-        const dpr = window.devicePixelRatio || 1;
-        canvas.width = rect.width * dpr;
-        canvas.height = rect.height * dpr;
-        canvas.style.width = `${rect.width}px`;
-        canvas.style.height = `${rect.height}px`;
-
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.scale(dpr, dpr);
-          ctx.fillStyle = '#FFFFFF';
-          ctx.fillRect(0, 0, rect.width, rect.height);
-          ctx.lineCap = 'round';
-          ctx.lineJoin = 'round';
-        }
-      }
-    };
-
-    resize();
-    window.addEventListener('resize', resize);
-    return () => window.removeEventListener('resize', resize);
-  }, [roundPhase, isDrawer]);
+        <p className="text-center text-white/40 text-xs pt-4 pb-2">
+          Waiting for host to Play Again or return Home…
+        </p>
+      </div>
+    );
+  }
 
   // ─── Drawing Canvas Handlers ──────────────────────────────────────────────
 

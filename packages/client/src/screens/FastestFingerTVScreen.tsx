@@ -6,7 +6,7 @@ import { useGameStore } from '../store/gameStore';
 import type { FastestFingerSettings, FastestFingerTimerOption } from '@chitram/shared';
 
 const TIMER_OPTIONS: FastestFingerTimerOption[] = [5, 10, 15, 20, 30];
-const QUESTION_COUNT_OPTIONS = [5, 10, 15, 20];
+const QUESTION_COUNT_OPTIONS = [10, 20, 30, 50];
 
 interface Props {
   hostIP: string;

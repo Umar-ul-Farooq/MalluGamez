@@ -1,4 +1,4 @@
-import type { Room, Player, RoomSettings, RoomPublicState, GameType, CharadesSettings, ImposterSettings, EmojiSettings, DrawIdentifySettings } from '@chitram/shared';
+import type { Room, Player, RoomSettings, RoomPublicState, GameType, CharadesSettings, ImposterSettings, EmojiSettings, DrawIdentifySettings, FastestFingerSettings } from '@chitram/shared';
 import type { GameServer } from '../socket/index';
 import { GameEngine } from './GameEngine';
 import { WordBank } from './WordBank';
@@ -6,6 +6,7 @@ import { CharadesEngine } from './CharadesEngine';
 import { ImposterEngine } from './ImposterEngine';
 import { EmojiEngine } from './EmojiEngine';
 import { DrawIdentifyEngine } from './DrawIdentifyEngine';
+import { FastestFingerEngine } from './FastestFingerEngine';
 
 function generateRoomCode(): string {
   return Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -19,6 +20,7 @@ export class RoomManager {
   private imposterEngines = new Map<string, ImposterEngine>();
   private emojiEngines = new Map<string, EmojiEngine>();
   private drawIdentifyEngines = new Map<string, DrawIdentifyEngine>();
+  private fastestFingerEngines = new Map<string, FastestFingerEngine>();
   private disconnectTimeouts = new Map<string, NodeJS.Timeout>();
 
   // ─── Create / Join ──────────────────────────────────────────────────────
@@ -76,6 +78,10 @@ export class RoomManager {
         language: 'english',
         drawingDurationSeconds: 15,
         identificationDurationSeconds: 60,
+      } : undefined,
+      fastestFingerSettings: gameType === 'fastest-finger' ? {
+        timerSeconds: 15,
+        totalQuestions: 20,
       } : undefined,
       currentRound: 0,
       currentDrawerId: null,
@@ -185,6 +191,12 @@ export class RoomManager {
       const drawIdentifyEngine = this.drawIdentifyEngines.get(code);
       if (drawIdentifyEngine) {
         drawIdentifyEngine.handlePlayerReconnect(oldSocketId, socketId, existingPlayer);
+      }
+
+      // Notify Fastest Finger engine of reconnection
+      const fastestFingerEngine = this.fastestFingerEngines.get(code);
+      if (fastestFingerEngine) {
+        fastestFingerEngine.handlePlayerReconnect(oldSocketId, socketId, existingPlayer);
       }
 
       return { room, player: existingPlayer };
@@ -312,6 +324,27 @@ export class RoomManager {
       };
       engine = new DrawIdentifyEngine(room, io, settings);
       this.drawIdentifyEngines.set(code, engine);
+    }
+    return engine;
+  }
+
+  // ─── Fastest Finger – Picture Rush Integration ────────────────────────────
+
+  getFastestFingerEngine(code: string): FastestFingerEngine | undefined {
+    return this.fastestFingerEngines.get(code);
+  }
+
+  ensureFastestFingerEngine(code: string, io: GameServer): FastestFingerEngine {
+    let engine = this.fastestFingerEngines.get(code);
+    if (!engine) {
+      const room = this.rooms.get(code);
+      if (!room) throw new Error('Room not found');
+      const settings: FastestFingerSettings = room.fastestFingerSettings ?? {
+        timerSeconds: 15,
+        totalQuestions: 20,
+      };
+      engine = new FastestFingerEngine(room, io, settings);
+      this.fastestFingerEngines.set(code, engine);
     }
     return engine;
   }
@@ -482,6 +515,7 @@ export class RoomManager {
     this.charadesEngines.get(code)?.stop();
     this.emojiEngines.get(code)?.destroy();
     this.drawIdentifyEngines.get(code)?.stop();
+    this.fastestFingerEngines.get(code)?.stop();
 
     // Cancel all disconnect timers for this room
     for (const [key, timer] of this.disconnectTimeouts.entries()) {
@@ -524,6 +558,8 @@ export class RoomManager {
     this.emojiEngines.delete(code);
     this.drawIdentifyEngines.get(code)?.stop();
     this.drawIdentifyEngines.delete(code);
+    this.fastestFingerEngines.get(code)?.stop();
+    this.fastestFingerEngines.delete(code);
   }
 
   // ─── Helpers ────────────────────────────────────────────────────────────

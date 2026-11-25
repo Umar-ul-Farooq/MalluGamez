@@ -6,6 +6,7 @@ import CharadesMobileScreen from './CharadesMobileScreen';
 import ImposterMobileScreen from './ImposterMobileScreen';
 import EmojiMobileScreen from './EmojiMobileScreen';
 import DrawIdentifyMobileScreen from './DrawIdentifyMobileScreen';
+import FastestFingerMobileScreen from './FastestFingerMobileScreen';
 
 type JoinState = 'form' | 'waiting';
 
@@ -142,6 +143,11 @@ export default function LobbyScreen() {
   // If this room is for Draw & Identify Challenge, render DrawIdentify Mobile Controller
   if (room.gameType === 'draw-identify') {
     return <DrawIdentifyMobileScreen />;
+  }
+
+  // If this room is for Fastest Finger – Picture Rush, render FastestFinger Mobile Controller
+  if (room.gameType === 'fastest-finger') {
+    return <FastestFingerMobileScreen />;
   }
 
   const players = room.players.filter(p => !p.isHost);

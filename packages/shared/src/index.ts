@@ -1,6 +1,6 @@
 // ─── Game Platform ──────────────────────────────────────────────────────────
 
-export type GameType = 'pictionary' | 'charades' | 'imposter' | 'emoji' | 'draw-identify';
+export type GameType = 'pictionary' | 'charades' | 'imposter' | 'emoji' | 'draw-identify' | 'fastest-finger';
 
 // ─── Players ────────────────────────────────────────────────────────────────
 
@@ -37,6 +37,7 @@ export interface Room {
   imposterSettings?: ImposterSettings;
   emojiSettings?: EmojiSettings;
   drawIdentifySettings?: DrawIdentifySettings;
+  fastestFingerSettings?: FastestFingerSettings;
   currentRound: number;
   currentDrawerId: string | null;
   currentWord: string | null;       // only sent to drawer
@@ -45,6 +46,7 @@ export interface Room {
   imposterState?: ImposterPublicState;
   emojiState?: EmojiPublicState;
   drawIdentifyState?: DrawIdentifyPublicState;
+  fastestFingerState?: FastestFingerPublicState;
   sessionId?: string | null;
   hostToken?: string;
 }
@@ -300,6 +302,50 @@ export interface DrawIdentifyPublicState {
   objectList: DrawIdentifyObjectItem[];
 }
 
+// ─── Fastest Finger – Picture Rush Types ────────────────────────────────────
+
+export type FastestFingerTimerOption = 5 | 10 | 15 | 20 | 30;
+export type FastestFingerDifficulty = 'Easy' | 'Medium' | 'Hard';
+
+export interface FastestFingerQuestionItem {
+  id: string;
+  image: string;
+  answer: string;
+  acceptedAnswers: string[];
+  category: string;
+  difficulty: FastestFingerDifficulty;
+  attribution?: string;
+}
+
+export interface FastestFingerSettings {
+  timerSeconds: FastestFingerTimerOption; // 5 | 10 | 15 | 20 | 30 (default 15)
+  totalQuestions: number;                 // configurable, capped by available bank size
+}
+
+export type FastestFingerRoundPhase =
+  | 'question'   // picture active, players submitting answers
+  | 'won'        // first correct answer accepted, showing winner & 10 pts
+  | 'skipped'    // timer expired with no correct answer, revealing answer
+  | 'game-end';  // all questions completed
+
+export interface FastestFingerPublicState {
+  sessionId: string;
+  questionId: string;
+  currentQuestionIndex: number;
+  totalQuestions: number;
+  roundPhase: FastestFingerRoundPhase;
+  imageUrl: string;
+  category: string;
+  difficulty: FastestFingerDifficulty;
+  timerSeconds: number;
+  winnerId: string | null;
+  winnerName: string | null;
+  winningAnswer: string | null;
+  pointsAwarded: number;
+  revealedAnswer: string | null;
+  correctCounts: Record<string, number>;
+}
+
 // ─── Socket.IO Events (Client → Server) ─────────────────────────────────────
 
 export interface ClientToServerEvents {
@@ -362,6 +408,12 @@ export interface ClientToServerEvents {
   'draw-identify:next-round': () => void; // host only
   'draw-identify:finish-game': () => void; // host only
   'draw-identify:restart-game': () => void; // host only
+
+  // ── Fastest Finger – Picture Rush Events ──
+  'fastest-finger:update-settings': (payload: Partial<FastestFingerSettings>) => void; // host only
+  'fastest-finger:start-game': () => void; // host only
+  'fastest-finger:submit-guess': (payload: { guess: string; sessionId: string; questionId: string }) => void;
+  'fastest-finger:restart-game': () => void; // host only
 }
 
 // ─── Socket.IO Events (Server → Client) ─────────────────────────────────────
@@ -415,6 +467,15 @@ export interface ServerToClientEvents {
   'draw-identify:secret-list': (payload: { roundId: string; objectList: DrawIdentifyObjectItem[] }) => void; // Opposing players only!
   'draw-identify:object-ticked': (payload: { objectIndex: number; identifiedBy: string; identifiedCount: number }) => void;
   'draw-identify:drawing-added': (drawing: SubmittedDrawing) => void;
+
+  // Fastest Finger – Picture Rush
+  'fastest-finger:state': (state: FastestFingerPublicState) => void;
+  'fastest-finger:guess-result': (payload: {
+    questionId: string;
+    isCorrect: boolean;
+    message: string;
+    points?: number;
+  }) => void;
 }
 
 // ─── Public room state (word hidden) ────────────────────────────────────────

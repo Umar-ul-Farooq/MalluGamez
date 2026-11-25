@@ -57,6 +57,10 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rm: Roo
         const engine = rm.ensureDrawIdentifyEngine(room.code, io);
         socket.emit('draw-identify:state', engine.getPublicState());
       }
+      if (room.gameType === 'fastest-finger') {
+        const engine = rm.ensureFastestFingerEngine(room.code, io);
+        socket.emit('fastest-finger:state', engine.getPublicState());
+      }
       console.log(`[room] Host socket reclaimed room ${room.code}`);
     } catch (err: any) {
       socket.emit('room:error', err.message);
@@ -90,6 +94,10 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rm: Roo
       if (room.gameType === 'draw-identify') {
         const engine = rm.ensureDrawIdentifyEngine(room.code, io);
         socket.emit('draw-identify:state', engine.getPublicState());
+      }
+      if (room.gameType === 'fastest-finger') {
+        const engine = rm.ensureFastestFingerEngine(room.code, io);
+        socket.emit('fastest-finger:state', engine.getPublicState());
       }
       console.log(`[room] ${playerName} joined room ${room.code}`);
     } catch (err: any) {

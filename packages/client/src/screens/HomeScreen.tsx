@@ -104,6 +104,22 @@ const GAMES: GameItem[] = [
     status: 'live',
     hostUrl: '/tv?game=draw-identify',
   },
+  {
+    id: 'fastest-finger',
+    title: 'Fastest Finger – Picture Rush',
+    malayalamTitle: 'ഫാസ്റ്റസ്റ്റ് ഫിംഗർ',
+    subtitle: 'ചിത്രം കാണൂ, ആദ്യം ഉത്തരം പറയൂ!',
+    description: 'Race to identify real photographs on the TV! Type your answer on your phone — first correct answer wins 10 points!',
+    emoji: '⚡📸',
+    mode: 'multiplayer',
+    playerCount: '2–20 Players',
+    badge: 'NEW',
+    badgeColor: 'bg-orange-500 text-white font-black',
+    gradient: 'from-orange-950/70 via-amber-950/30 to-orange-950/70',
+    borderColor: 'border-orange-500/50 hover:border-orange-400',
+    status: 'live',
+    hostUrl: '/tv?game=fastest-finger',
+  },
 
   // ─── Single Player Coming Soon Games ───
   {

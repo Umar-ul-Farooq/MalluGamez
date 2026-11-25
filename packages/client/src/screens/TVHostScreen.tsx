@@ -10,6 +10,7 @@ import CharadesTVScreen from './CharadesTVScreen';
 import ImposterTVScreen from './ImposterTVScreen';
 import EmojiTVScreen from './EmojiTVScreen';
 import DrawIdentifyTVScreen from './DrawIdentifyTVScreen';
+import FastestFingerTVScreen from './FastestFingerTVScreen';
 import type { RoomSettings, GameType } from '@chitram/shared';
 
 const TIMER_OPTIONS = [30, 60, 90, 120];
@@ -180,6 +181,11 @@ export default function TVHostScreen() {
   // If this room is for Draw & Identify Challenge, render DrawIdentify TV Screen
   if (room.gameType === 'draw-identify') {
     return <DrawIdentifyTVScreen hostIP={hostIP} />;
+  }
+
+  // If this room is for Fastest Finger – Picture Rush, render FastestFinger TV Screen
+  if (room.gameType === 'fastest-finger') {
+    return <FastestFingerTVScreen hostIP={hostIP} />;
   }
 
   const players = room.players.filter(p => !p.isHost);

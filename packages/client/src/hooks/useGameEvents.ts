@@ -160,6 +160,12 @@ export function useGameEvents() {
       store.addToast(`✓ ${data.identifiedBy} identified object #${data.objectIndex + 1}! (${data.identifiedCount} found)`, 'success');
     });
 
+    // ── Fastest Finger – Picture Rush Events ──
+    socket.on('fastest-finger:state', store.setFastestFingerState);
+    socket.on('fastest-finger:guess-result', (res) => {
+      store.setFastestFingerGuessFeedback(res);
+    });
+
     // If already connected when this effect runs
     if (socket.connected) onConnect();
 
@@ -189,6 +195,8 @@ export function useGameEvents() {
       socket.off('draw-identify:state');
       socket.off('draw-identify:secret-list');
       socket.off('draw-identify:object-ticked');
+      socket.off('fastest-finger:state');
+      socket.off('fastest-finger:guess-result');
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

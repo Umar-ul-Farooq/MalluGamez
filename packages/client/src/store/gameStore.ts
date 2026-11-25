@@ -10,6 +10,7 @@ import type {
   EmojiPublicState,
   DrawIdentifyPublicState,
   DrawIdentifyObjectItem,
+  FastestFingerPublicState,
 } from '@chitram/shared';
 
 export interface Toast {
@@ -62,6 +63,10 @@ interface GameState {
   drawIdentifySecretList: DrawIdentifyObjectItem[];
   lastTickedObject: { objectIndex: number; identifiedBy: string; identifiedCount: number } | null;
 
+  // ─── Fastest Finger – Picture Rush In-game ────────────────────────────────
+  fastestFingerState: FastestFingerPublicState | null;
+  fastestFingerGuessFeedback: { questionId: string; isCorrect: boolean; message: string; points?: number; seq: number } | null;
+
   // ─── UI ───────────────────────────────────────────────────────────────────
   toasts: Toast[];
 
@@ -85,6 +90,8 @@ interface GameState {
   setDrawIdentifyState: (s: DrawIdentifyPublicState) => void;
   setDrawIdentifySecretList: (list: DrawIdentifyObjectItem[]) => void;
   setLastTickedObject: (o: { objectIndex: number; identifiedBy: string; identifiedCount: number } | null) => void;
+  setFastestFingerState: (s: FastestFingerPublicState) => void;
+  setFastestFingerGuessFeedback: (f: { questionId: string; isCorrect: boolean; message: string; points?: number } | null) => void;
   handleCharadesRoundEnd: (p: {
     result: 'correct' | 'timeout';
     pointsAwardedTo: 'A' | 'B';
@@ -122,6 +129,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   drawIdentifyState: null,
   drawIdentifySecretList: [],
   lastTickedObject: null,
+  fastestFingerState: null,
+  fastestFingerGuessFeedback: null,
   toasts: [],
 
   setMyId:      (id) => set({ myId: id }),
@@ -162,6 +171,13 @@ export const useGameStore = create<GameState>((set, get) => ({
   setDrawIdentifyState: (s) => set({ drawIdentifyState: s }),
   setDrawIdentifySecretList: (list) => set({ drawIdentifySecretList: list }),
   setLastTickedObject: (o) => set({ lastTickedObject: o }),
+  setFastestFingerState: (s) => set({ fastestFingerState: s }),
+  setFastestFingerGuessFeedback: (f) =>
+    set(state => ({
+      fastestFingerGuessFeedback: f
+        ? { ...f, seq: (state.fastestFingerGuessFeedback?.seq ?? 0) + 1 }
+        : null,
+    })),
   handleCharadesRoundEnd: (p) => {
     set({ lastCharadesRoundEnd: p, secretMovie: null });
     const teamName = p.pointsAwardedTo === 'A'
@@ -189,7 +205,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     leaderboard: [], charadesState: null, secretMovie: null,
     lastCharadesRoundEnd: null, imposterState: null, imposterSecret: null,
     hasVotedImposter: false, emojiState: null, emojiGuessFeedback: null,
-    drawIdentifyState: null, drawIdentifySecretList: [], lastTickedObject: null, toasts: [],
+    drawIdentifyState: null, drawIdentifySecretList: [], lastTickedObject: null,
+    fastestFingerState: null, fastestFingerGuessFeedback: null, toasts: [],
   }),
 }));
 

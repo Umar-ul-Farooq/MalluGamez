@@ -43,13 +43,15 @@ export class RoomManager {
       isOnline: true,
     };
 
+    const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+
     const room: Room = {
       code,
       gameType,
       phase: 'lobby',
       players: [player],
       hostToken,
-      sessionId: null,
+      sessionId,
       settings: { roundDurationSeconds: 60, totalRounds: 3 },
       charadesSettings: gameType === 'charades' ? {
         roundDurationSeconds: 90,
@@ -93,11 +95,14 @@ export class RoomManager {
     return { room, player };
   }
 
-  reclaimHost(socketId: string, code: string, hostToken: string): { room: Room; player: Player } {
+  reclaimHost(socketId: string, code: string, hostToken: string, expectedGameType?: GameType): { room: Room; player: Player } {
     const room = this.rooms.get(code);
     if (!room) throw new Error('Room not found');
     if (!room.hostToken || room.hostToken !== hostToken) {
       throw new Error('Invalid host credentials');
+    }
+    if (expectedGameType && room.gameType !== expectedGameType) {
+      throw new Error('Room game type mismatch');
     }
 
     let hostPlayer = room.players.find(p => p.isHost);
@@ -141,6 +146,19 @@ export class RoomManager {
   joinRoom(socketId: string, code: string, playerName: string): { room: Room; player: Player } {
     const room = this.rooms.get(code);
     if (!room) throw new Error('Room not found');
+
+    // If this socket was previously mapped to a different room, detach it cleanly
+    const prevCode = this.playerToRoom.get(socketId);
+    if (prevCode && prevCode !== code) {
+      this.playerToRoom.delete(socketId);
+      const prevRoom = this.rooms.get(prevCode);
+      if (prevRoom) {
+        const prevPlayer = prevRoom.players.find(p => p.id === socketId);
+        if (prevPlayer && !prevPlayer.isHost) {
+          prevRoom.players = prevRoom.players.filter(p => p.id !== socketId);
+        }
+      }
+    }
 
     const cleanName = playerName.trim();
 
@@ -500,8 +518,15 @@ export class RoomManager {
 
     console.log(`[room] Terminating room ${code} and all active game sessions. Reason: ${reason}`);
 
-    // Invalidate active session ID
+    // Invalidate active session ID and clear all game-specific state
     room.sessionId = null;
+    room.currentWord = null;
+    room.currentDrawerId = null;
+    room.charadesState = undefined;
+    room.imposterState = undefined;
+    room.emojiState = undefined;
+    room.drawIdentifyState = undefined;
+    room.fastestFingerState = undefined;
 
     // Reset and stop Imposter engine if present
     const imposterEngine = this.imposterEngines.get(code);
@@ -525,8 +550,9 @@ export class RoomManager {
       }
     }
 
-    // Broadcast room:terminated and imposter:session-terminated to all players in the room
+    // Broadcast room:terminated, room:reset, and imposter:session-terminated to all players in the room
     io?.to(code).emit('room:terminated', { reason });
+    io?.to(code).emit('room:reset', { reason });
     io?.to(code).emit('imposter:session-terminated', { reason });
 
     // Remove player mappings

@@ -22,10 +22,29 @@ export default function LobbyScreen() {
 
   const { room, connected } = useGameStore();
 
-  // Once we receive room:joined, switch to waiting state
+  // If QR code URL specifies a different room than what is currently in store, clear stale state immediately
   useEffect(() => {
-    if (room) setJoinState('waiting');
-  }, [room]);
+    if (urlRoomCode) {
+      setRoomCode(urlRoomCode);
+      const currentRoom = useGameStore.getState().room;
+      if (currentRoom && currentRoom.code !== urlRoomCode) {
+        localStorage.removeItem('chitram_session');
+        useGameStore.getState().reset();
+        setJoinState('form');
+        setJoining(false);
+        setError('');
+      }
+    }
+  }, [urlRoomCode]);
+
+  // Once we receive room:joined for the target room, switch to waiting state; if room cleared, return to form
+  useEffect(() => {
+    if (room && (!urlRoomCode || room.code === urlRoomCode)) {
+      setJoinState('waiting');
+    } else if (!room) {
+      setJoinState('form');
+    }
+  }, [room, urlRoomCode]);
 
   // Listen for room errors
   useEffect(() => {

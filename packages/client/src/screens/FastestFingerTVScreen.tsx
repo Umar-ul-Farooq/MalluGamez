@@ -51,7 +51,7 @@ export default function FastestFingerTVScreen({ hostIP }: Props) {
   }
 
   function confirmForceReset() {
-    getSocket().emit('room:force-reset');
+    getSocket().emit('room:force-reset', { roomCode: room?.code, hostToken: room?.hostToken });
     sessionStorage.removeItem('chitram_tv_host');
     useGameStore.getState().reset();
     setShowResetConfirm(false);

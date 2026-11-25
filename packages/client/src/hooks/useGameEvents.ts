@@ -16,76 +16,120 @@ export function useGameEvents() {
     const socket = getSocket();
 
     const onConnect = () => {
-      store.setMyId(socket.id ?? '');
-      store.setConnected(true);
+      const current = useGameStore.getState();
+      current.setMyId(socket.id ?? '');
+      current.setConnected(true);
 
-      // Check if this browser window is a TV host attempting to reconnect/refresh
-      const savedHost = sessionStorage.getItem('chitram_tv_host');
-      if (savedHost) {
-        try {
-          const { roomCode, hostToken } = JSON.parse(savedHost);
-          if (roomCode && hostToken) {
-            console.log(`[reconnect] Reclaiming host session for room ${roomCode}`);
-            socket.emit('room:reclaim-host', { roomCode, hostToken });
-            return;
-          }
-        } catch (e) {}
+      const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
+      const searchParams = typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search)
+        : new URLSearchParams();
+
+      // Never auto-rejoin or reclaim an old session when on the Home screen
+      if (pathname === '/' || pathname === '') {
+        return;
       }
 
-      // Auto-reconnect immediately when mobile phone unlocks screen or network reconnects!
+      // Check if this browser window is a TV host attempting to reconnect/refresh on /tv
+      if (pathname.startsWith('/tv')) {
+        const tvGameParam = searchParams.get('game') || 'pictionary';
+        const savedHost = sessionStorage.getItem('chitram_tv_host');
+        if (savedHost) {
+          try {
+            const { roomCode, hostToken, gameType } = JSON.parse(savedHost);
+            if (roomCode && hostToken && gameType && gameType === tvGameParam) {
+              console.log(`[reconnect] Reclaiming host session for ${gameType} room ${roomCode}`);
+              socket.emit('room:reclaim-host', { roomCode, hostToken, gameType });
+              return;
+            }
+          } catch (e) {}
+        }
+        return;
+      }
+
+      // Auto-reconnect mobile player ONLY if they are not scanning a DIFFERENT QR room code
+      const urlRoomCode = (searchParams.get('room') ?? '').toUpperCase();
       const saved = localStorage.getItem('chitram_session');
       if (saved) {
         try {
           const { roomCode, playerName } = JSON.parse(saved);
+          if (urlRoomCode && roomCode && roomCode.toUpperCase() !== urlRoomCode) {
+            // Player scanned a new QR code for a different room — clear stale session!
+            localStorage.removeItem('chitram_session');
+            useGameStore.getState().reset();
+            return;
+          }
           if (roomCode && playerName) {
             socket.emit('room:join', { roomCode, playerName });
           }
         } catch (e) {}
       }
     };
-    const onDisconnect = () => store.setConnected(false);
+    const onDisconnect = () => useGameStore.getState().setConnected(false);
 
     const onRoomJoined = (room: any) => {
-      store.setRoom(room);
+      const current = useGameStore.getState();
+      if (current.room && (current.room.code !== room.code || current.room.gameType !== room.gameType)) {
+        current.reset();
+        useGameStore.getState().setMyId(socket.id ?? '');
+        useGameStore.getState().setConnected(true);
+      }
+      useGameStore.getState().setRoom(room);
       const me = room.players.find((p: any) => p.id === socket.id);
       if (me && !me.isHost) {
         localStorage.setItem('chitram_session', JSON.stringify({ roomCode: room.code, playerName: me.name }));
       }
     };
 
+    const onRoomUpdated = (room: any) => {
+      const current = useGameStore.getState();
+      if (current.room && (current.room.code !== room.code || current.room.gameType !== room.gameType)) {
+        // Ignore stale room updates from a previous room/game
+        return;
+      }
+      current.setRoom(room);
+    };
+
     socket.on('connect',       onConnect);
     socket.on('disconnect',    onDisconnect);
     socket.on('room:joined',   onRoomJoined);
-    socket.on('room:updated',  store.setRoom);
-    socket.on('room:host-token', ({ hostToken }) => {
-      if (store.room) {
-        sessionStorage.setItem('chitram_tv_host', JSON.stringify({ roomCode: store.room.code, hostToken }));
+    socket.on('room:updated',  onRoomUpdated);
+    socket.on('room:host-token', ({ hostToken, roomCode, gameType }) => {
+      const activeRoom = useGameStore.getState().room;
+      const code = roomCode || activeRoom?.code;
+      const gType = gameType || activeRoom?.gameType;
+      if (code && gType) {
+        sessionStorage.setItem('chitram_tv_host', JSON.stringify({ roomCode: code, hostToken, gameType: gType }));
       }
     });
     socket.on('room:terminated', ({ reason }) => {
       console.log(`[room] Room terminated: ${reason}`);
       localStorage.removeItem('chitram_session');
       sessionStorage.removeItem('chitram_tv_host');
-      store.reset();
-      store.addToast(`ℹ️ ${reason || 'Game session ended by TV host'}`, 'info');
+      useGameStore.getState().reset();
+      useGameStore.getState().addToast(`ℹ️ ${reason || 'Game session ended by TV host'}`, 'info');
       navigate('/');
     });
     socket.on('room:reset', ({ reason }) => {
       console.log(`[room] Room reset: ${reason}`);
       localStorage.removeItem('chitram_session');
       sessionStorage.removeItem('chitram_tv_host');
-      store.reset();
-      store.addToast(`⚠️ ${reason || 'Game session was reset'}`, 'info');
+      useGameStore.getState().reset();
+      useGameStore.getState().addToast(`⚠️ ${reason || 'Game session was reset'}`, 'info');
       navigate('/');
     });
     socket.on('room:error',    (msg) => {
-      if (msg.includes('not found') || msg.includes('Invalid host credentials')) {
+      if (
+        msg.includes('not found') ||
+        msg.includes('Invalid host credentials') ||
+        msg.includes('game type mismatch')
+      ) {
         localStorage.removeItem('chitram_session');
         sessionStorage.removeItem('chitram_tv_host');
-        store.reset();
+        useGameStore.getState().reset();
         navigate('/');
       }
-      store.addToast(`⚠️ ${msg}`, 'error');
+      useGameStore.getState().addToast(`⚠️ ${msg}`, 'error');
     });
 
     socket.on('game:started',  (room) => {

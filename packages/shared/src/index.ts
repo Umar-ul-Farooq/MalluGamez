@@ -351,10 +351,10 @@ export interface FastestFingerPublicState {
 export interface ClientToServerEvents {
   'room:create': (payload: { playerName: string; gameType?: GameType; hostToken?: string }) => void;
   'room:join':   (payload: { roomCode: string; playerName: string }) => void;
-  'room:reclaim-host': (payload: { roomCode: string; hostToken: string }) => void;
+  'room:reclaim-host': (payload: { roomCode: string; hostToken: string; gameType?: GameType }) => void;
   'room:leave':  () => void;
   'room:terminate': () => void; // host terminates room and returns all to home
-  'room:force-reset': () => void; // host force-resets room and all sessions
+  'room:force-reset': (payload?: { roomCode?: string; hostToken?: string }) => void; // host force-resets room and all sessions
 
   'game:start':  () => void;                        // host only
   'game:settings': (settings: RoomSettings) => void; // host only
@@ -422,7 +422,7 @@ export interface ServerToClientEvents {
   'room:joined':  (room: RoomPublicState) => void;
   'room:updated': (room: RoomPublicState) => void;
   'room:error':   (message: string) => void;
-  'room:host-token': (payload: { hostToken: string }) => void;
+  'room:host-token': (payload: { hostToken: string; roomCode?: string; gameType?: GameType }) => void;
   'room:terminated': (payload: { reason: string }) => void;
   'room:reset': (payload: { reason: string }) => void;
 

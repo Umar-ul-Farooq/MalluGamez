@@ -5,11 +5,29 @@ import type { RoomManager } from '../game/RoomManager';
 
 type GameSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
 
+function leaveOtherRooms(socket: GameSocket) {
+  for (const r of socket.rooms) {
+    if (r !== socket.id) {
+      socket.leave(r);
+    }
+  }
+}
+
 export function registerRoomHandlers(io: GameServer, socket: GameSocket, rm: RoomManager) {
 
   socket.on('room:create', ({ playerName, gameType = 'pictionary', hostToken }) => {
     try {
-      const { room, player } = rm.createRoom(socket.id, playerName, gameType, hostToken);
+      // Terminate any previous room still hosted by this socket so stale events never leak
+      const existingRoom = rm.getRoomByPlayer(socket.id);
+      if (existingRoom) {
+        const existingPlayer = existingRoom.players.find(p => p.id === socket.id);
+        if (existingPlayer?.isHost) {
+          rm.terminateRoom(existingRoom.code, socket.id, io, 'Host started a new game');
+        }
+      }
+      leaveOtherRooms(socket);
+
+      const { room } = rm.createRoom(socket.id, playerName, gameType, hostToken);
       socket.join(room.code);
       if (gameType === 'charades') {
         rm.ensureCharadesEngine(room.code, io);
@@ -23,8 +41,15 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rm: Roo
       if (gameType === 'draw-identify') {
         rm.ensureDrawIdentifyEngine(room.code, io);
       }
+      if (gameType === 'fastest-finger') {
+        rm.ensureFastestFingerEngine(room.code, io);
+      }
       if (room.hostToken) {
-        socket.emit('room:host-token', { hostToken: room.hostToken });
+        socket.emit('room:host-token', {
+          hostToken: room.hostToken,
+          roomCode: room.code,
+          gameType: room.gameType,
+        });
       }
       socket.emit('room:joined', rm.publicState(room.code));
       console.log(`[room] ${playerName} created ${gameType} room ${room.code} with hostToken ${room.hostToken}`);
@@ -33,11 +58,16 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rm: Roo
     }
   });
 
-  socket.on('room:reclaim-host', ({ roomCode, hostToken }) => {
+  socket.on('room:reclaim-host', ({ roomCode, hostToken, gameType }) => {
     try {
-      const { room, player } = rm.reclaimHost(socket.id, roomCode.toUpperCase(), hostToken);
+      leaveOtherRooms(socket);
+      const { room } = rm.reclaimHost(socket.id, roomCode.toUpperCase(), hostToken, gameType);
       socket.join(room.code);
-      socket.emit('room:host-token', { hostToken });
+      socket.emit('room:host-token', {
+        hostToken,
+        roomCode: room.code,
+        gameType: room.gameType,
+      });
       socket.emit('room:joined', rm.publicState(room.code));
       io.to(room.code).emit('room:updated', rm.publicState(room.code));
 
@@ -75,7 +105,8 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rm: Roo
         socket.emit('room:error', 'Room code and player name are required');
         return;
       }
-      const { room, player } = rm.joinRoom(socket.id, roomCode.toUpperCase(), playerName);
+      leaveOtherRooms(socket);
+      const { room } = rm.joinRoom(socket.id, roomCode.toUpperCase(), playerName);
       socket.join(room.code);
       socket.emit('room:joined', rm.publicState(room.code));
       io.to(room.code).emit('room:updated', rm.publicState(room.code));
@@ -129,18 +160,31 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rm: Roo
   socket.on('room:terminate', () => {
     try {
       const room = rm.getRoomByPlayer(socket.id);
-      if (!room) return;
-      rm.terminateRoom(room.code, socket.id, io, 'TV Host exited the game');
+      if (room) {
+        rm.terminateRoom(room.code, socket.id, io, 'TV Host exited the game');
+      }
+      leaveOtherRooms(socket);
     } catch (err: any) {
       console.error('[room:terminate error]', err);
     }
   });
 
-  socket.on('room:force-reset', () => {
+  socket.on('room:force-reset', (payload?: { roomCode?: string; hostToken?: string }) => {
     try {
       const room = rm.getRoomByPlayer(socket.id);
-      if (!room) return;
-      rm.terminateRoom(room.code, socket.id, io, 'Host performed Force Reset');
+      if (room) {
+        rm.terminateRoom(room.code, socket.id, io, 'Host performed Force Reset');
+      } else if (payload?.roomCode) {
+        const targetRoom = rm.getRoom(payload.roomCode.toUpperCase());
+        if (targetRoom && (!payload.hostToken || targetRoom.hostToken === payload.hostToken)) {
+          rm.terminateRoom(targetRoom.code, targetRoom.players.find(p => p.isHost)?.id ?? socket.id, io, 'Host performed Force Reset');
+        } else {
+          socket.emit('room:reset', { reason: 'Room already cleared' });
+        }
+      } else {
+        socket.emit('room:reset', { reason: 'Session reset' });
+      }
+      leaveOtherRooms(socket);
     } catch (err: any) {
       console.error('[room:force-reset error]', err);
     }

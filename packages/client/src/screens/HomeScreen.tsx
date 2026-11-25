@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getSocket } from '../lib/socket';
+import { useGameStore } from '../store/gameStore';
 
 type CategoryTab = 'all' | 'multiplayer' | 'singleplayer';
 
@@ -172,6 +174,26 @@ const GAMES: GameItem[] = [
 export default function HomeScreen() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<CategoryTab>('all');
+
+  // Ensure any lingering TV session is cleanly terminated when returning to Home
+  useEffect(() => {
+    const savedHost = sessionStorage.getItem('chitram_tv_host');
+    const activeRoom = useGameStore.getState().room;
+    if (savedHost || activeRoom) {
+      if (savedHost) {
+        try {
+          const { roomCode, hostToken } = JSON.parse(savedHost);
+          getSocket().emit('room:force-reset', { roomCode, hostToken });
+        } catch (e) {
+          getSocket().emit('room:terminate');
+        }
+      } else if (activeRoom) {
+        getSocket().emit('room:terminate');
+      }
+      sessionStorage.removeItem('chitram_tv_host');
+      useGameStore.getState().reset();
+    }
+  }, []);
 
   const multiplayerGames = GAMES.filter(g => g.mode === 'multiplayer' || g.mode === 'both');
   const singleplayerGames = [

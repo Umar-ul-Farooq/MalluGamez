@@ -36,8 +36,12 @@ export default function TVHostScreen() {
   }
 
   function confirmForceReset() {
+    const currentRoom = useGameStore.getState().room;
     sessionStorage.removeItem('chitram_tv_host');
-    getSocket().emit('room:force-reset');
+    getSocket().emit('room:force-reset', {
+      roomCode: currentRoom?.code,
+      hostToken: currentRoom?.hostToken,
+    });
     useGameStore.getState().reset();
     setShowResetConfirm(false);
     navigate('/');
@@ -133,16 +137,23 @@ export default function TVHostScreen() {
       if (creating) return;
       setCreating(true);
 
+      const currentRoom = useGameStore.getState().room;
+      if (currentRoom && currentRoom.gameType !== gameTypeParam) {
+        useGameStore.getState().reset();
+      }
+
       const savedHost = sessionStorage.getItem('chitram_tv_host');
       if (savedHost) {
         try {
           const { roomCode, hostToken, gameType } = JSON.parse(savedHost);
-          if (roomCode && hostToken && (!gameType || gameType === gameTypeParam)) {
-            console.log(`[TVHost] Reclaiming host room ${roomCode}`);
-            socket.emit('room:reclaim-host', { roomCode, hostToken });
+          if (roomCode && hostToken && gameType && gameType === gameTypeParam) {
+            console.log(`[TVHost] Reclaiming host room ${roomCode} (${gameType})`);
+            socket.emit('room:reclaim-host', { roomCode, hostToken, gameType });
             return;
           }
         } catch (e) {}
+        // Stale or mismatched gameType token — remove it before creating a fresh room
+        sessionStorage.removeItem('chitram_tv_host');
       }
 
       socket.emit('room:create', { playerName: 'Host', gameType: gameTypeParam });

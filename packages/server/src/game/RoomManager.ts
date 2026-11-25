@@ -74,6 +74,7 @@ export class RoomManager {
       drawIdentifySettings: gameType === 'draw-identify' ? {
         objectCount: 12,
         language: 'english',
+        drawingDurationSeconds: 15,
         identificationDurationSeconds: 60,
       } : undefined,
       currentRound: 0,
@@ -306,6 +307,7 @@ export class RoomManager {
       const settings = room.drawIdentifySettings ?? {
         objectCount: 12,
         language: 'english',
+        drawingDurationSeconds: 15,
         identificationDurationSeconds: 60,
       };
       engine = new DrawIdentifyEngine(room, io, settings);

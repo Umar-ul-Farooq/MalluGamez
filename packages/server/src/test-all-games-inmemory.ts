@@ -3,7 +3,7 @@ import { GameEngine } from './game/GameEngine.js';
 import { CharadesEngine } from './game/CharadesEngine.js';
 import { ImposterEngine } from './game/ImposterEngine.js';
 import { EmojiEngine } from './game/EmojiEngine.js';
-import { DrawIdentifyEngine, getAutoDrawingTimer } from './game/DrawIdentifyEngine.js';
+import { DrawIdentifyEngine } from './game/DrawIdentifyEngine.js';
 import type { GameServer } from './socket/index.js';
 
 function createMockIO() {
@@ -327,8 +327,9 @@ async function runTestSuite() {
     rm.joinRoom('d3', code, 'Manu');
 
     const engine = rm.ensureDrawIdentifyEngine(code, mockIO);
+    engine.updateSettings({ drawingDurationSeconds: 18 });
     engine.updateSettings({ objectCount: 6 });
-    assert(getAutoDrawingTimer(6) === 8, 'Auto timer for 6 objects must be 8s');
+    assert(engine.getSettings().drawingDurationSeconds === 18, 'Timer must stay 18s when object count changes');
 
     mockIO.clearEvents();
     engine.startGame();

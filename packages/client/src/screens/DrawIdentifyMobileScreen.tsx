@@ -15,12 +15,94 @@ export default function DrawIdentifyMobileScreen() {
   const isPaintingRef = useRef<boolean>(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
 
-  if (!room || !drawIdentifyState) {
+  const MIN_DRAWING_SECONDS = 5;
+  const MAX_DRAWING_SECONDS = 60;
+  const DEFAULT_DRAWING_SECONDS = 15;
+
+  if (!room || room.phase === 'lobby' || !drawIdentifyState) {
+    const settings = room?.drawIdentifySettings ?? {
+      objectCount: 12,
+      language: 'english' as const,
+      drawingDurationSeconds: DEFAULT_DRAWING_SECONDS,
+      identificationDurationSeconds: 60,
+    };
+    const drawingSeconds =
+      drawIdentifyState?.drawingDurationSeconds ??
+      settings.drawingDurationSeconds ??
+      DEFAULT_DRAWING_SECONDS;
+    const lobbyObjectCount = drawIdentifyState?.objectCount ?? settings.objectCount ?? 12;
+    const players = room?.players.filter(p => !p.isHost) ?? [];
+
+    const adjustTimer = (delta: number) => {
+      const next = Math.max(MIN_DRAWING_SECONDS, Math.min(MAX_DRAWING_SECONDS, drawingSeconds + delta));
+      getSocket().emit('draw-identify:update-settings', { drawingDurationSeconds: next });
+    };
+
     return (
-      <div className="h-full flex flex-col items-center justify-center p-6 bg-gray-950 text-white text-center">
-        <div className="text-4xl animate-bounce mb-3">✏️</div>
-        <p className="font-bold text-lg">Waiting for Draw & Identify round to start…</p>
-        <p className="text-white/40 text-sm mt-1">കളി ഉടൻ ആരംഭിക്കും</p>
+      <div className="h-full flex flex-col justify-between p-6 bg-gradient-to-b from-gray-950 via-teal-950/20 to-gray-950 text-white select-none overflow-y-auto">
+        <div className="text-center space-y-2 pt-2">
+          <div className="text-4xl">✏️🔍</div>
+          <h2 className="text-2xl font-black text-white">Draw & Identify</h2>
+          <p className="text-teal-300 text-xs font-bold">വരയും കണ്ടെത്തലും • Room {room?.code}</p>
+        </div>
+
+        <div className="my-6 space-y-4 max-w-sm w-full mx-auto">
+          {/* Synchronized Drawing Timer Control */}
+          <div className="bg-white/5 border border-white/10 rounded-3xl p-5 space-y-4">
+            <div className="text-center">
+              <p className="text-xs uppercase tracking-widest font-bold text-white/60">Drawing Timer</p>
+              <p className="text-[11px] text-white/40 mt-0.5">Synced across TV & all phones</p>
+            </div>
+
+            <div className="flex items-center justify-center gap-4">
+              <button
+                type="button"
+                onClick={() => adjustTimer(-1)}
+                disabled={drawingSeconds <= MIN_DRAWING_SECONDS}
+                aria-label="Decrease drawing timer"
+                className="w-12 h-12 rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed text-white font-black text-2xl flex items-center justify-center transition-all"
+              >
+                −
+              </button>
+              <span className="min-w-[5rem] text-center text-4xl font-mono font-black text-teal-300 tabular-nums">
+                {drawingSeconds}s
+              </span>
+              <button
+                type="button"
+                onClick={() => adjustTimer(1)}
+                disabled={drawingSeconds >= MAX_DRAWING_SECONDS}
+                aria-label="Increase drawing timer"
+                className="w-12 h-12 rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed text-white font-black text-2xl flex items-center justify-center transition-all"
+              >
+                +
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-3 border-t border-white/10 text-xs text-center">
+              <div className="bg-white/5 rounded-xl p-2">
+                <span className="text-white/40 block text-[10px] uppercase">Objects</span>
+                <span className="text-white font-bold">{lobbyObjectCount}</span>
+              </div>
+              <div className="bg-white/5 rounded-xl p-2">
+                <span className="text-white/40 block text-[10px] uppercase">Identify Time</span>
+                <span className="text-teal-300 font-bold">60s</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-center">
+            <p className="text-xs text-white/60">
+              {players.length} player{players.length !== 1 ? 's' : ''} in room
+            </p>
+            <p className="text-teal-300 text-xs font-semibold mt-1 animate-pulse">
+              Waiting for host to start the game…
+            </p>
+          </div>
+        </div>
+
+        <div className="text-center text-white/30 text-xs pb-2">
+          Settings lock once the game starts
+        </div>
       </div>
     );
   }

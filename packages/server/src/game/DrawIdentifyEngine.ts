@@ -10,14 +10,15 @@ import type {
 import { getRandomObjects } from './DrawIdentifyBank';
 import type { GameServer } from '../socket/index';
 
-export function getAutoDrawingTimer(count: 6 | 9 | 12 | 15): number {
-  switch (count) {
-    case 6: return 8;
-    case 9: return 12;
-    case 12: return 15;
-    case 15: return 20;
-    default: return 15;
+export const MIN_DRAWING_SECONDS = 5;
+export const MAX_DRAWING_SECONDS = 60;
+export const DEFAULT_DRAWING_SECONDS = 15;
+
+export function clampDrawingDuration(seconds?: number): number {
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds)) {
+    return DEFAULT_DRAWING_SECONDS;
   }
+  return Math.max(MIN_DRAWING_SECONDS, Math.min(MAX_DRAWING_SECONDS, Math.round(seconds)));
 }
 
 export class DrawIdentifyEngine {
@@ -46,9 +47,8 @@ export class DrawIdentifyEngine {
       language: 'english',
       identificationDurationSeconds: 60,
       ...initialSettings,
+      drawingDurationSeconds: clampDrawingDuration(initialSettings?.drawingDurationSeconds),
     };
-    this.settings.drawingDurationSeconds =
-      this.settings.drawingDurationSeconds || getAutoDrawingTimer(this.settings.objectCount);
 
     this.room.drawIdentifySettings = this.settings;
   }
@@ -56,14 +56,21 @@ export class DrawIdentifyEngine {
   // ─── Settings ─────────────────────────────────────────────────────────────
 
   updateSettings(patch: Partial<DrawIdentifySettings>) {
+    // Lock settings once the game has started
+    if (this.room.phase !== 'lobby') {
+      return;
+    }
+
+    const nextDrawingDuration =
+      patch.drawingDurationSeconds !== undefined
+        ? clampDrawingDuration(patch.drawingDurationSeconds)
+        : clampDrawingDuration(this.settings.drawingDurationSeconds);
+
     this.settings = {
       ...this.settings,
       ...patch,
+      drawingDurationSeconds: nextDrawingDuration,
     };
-    // Recalculate auto drawing timer if objectCount changed and drawingDurationSeconds wasn't explicitly patched
-    if (patch.objectCount && !patch.drawingDurationSeconds) {
-      this.settings.drawingDurationSeconds = getAutoDrawingTimer(this.settings.objectCount);
-    }
     this.room.drawIdentifySettings = this.settings;
     this.broadcastState();
   }
@@ -89,7 +96,7 @@ export class DrawIdentifyEngine {
       roundPhase: this.roundPhase,
       objectCount: this.settings.objectCount,
       language: this.settings.language,
-      drawingDurationSeconds: this.settings.drawingDurationSeconds || getAutoDrawingTimer(this.settings.objectCount),
+      drawingDurationSeconds: this.settings.drawingDurationSeconds ?? DEFAULT_DRAWING_SECONDS,
       identificationDurationSeconds: this.settings.identificationDurationSeconds,
       drawings: [...this.drawings],
       submittedCount,
@@ -174,7 +181,7 @@ export class DrawIdentifyEngine {
     this.room.drawIdentifyState = this.getPublicState();
     this.room.currentDrawerId = this.currentDrawerId;
 
-    const duration = this.settings.drawingDurationSeconds || getAutoDrawingTimer(this.settings.objectCount);
+    const duration = this.settings.drawingDurationSeconds ?? DEFAULT_DRAWING_SECONDS;
     this.timerRemaining = duration;
 
     console.log(`[DrawIdentifyEngine:${this.room.code}] Starting Round ${this.currentRound}. Drawer: ${this.currentDrawerId}. Timer: ${duration}s`);

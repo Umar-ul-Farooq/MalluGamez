@@ -1,5 +1,5 @@
 import { RoomManager } from './game/RoomManager.js';
-import { DrawIdentifyEngine, getAutoDrawingTimer } from './game/DrawIdentifyEngine.js';
+import { DrawIdentifyEngine, MIN_DRAWING_SECONDS, MAX_DRAWING_SECONDS, DEFAULT_DRAWING_SECONDS } from './game/DrawIdentifyEngine.js';
 import type { GameServer } from './socket/index.js';
 
 function createMockIO() {
@@ -47,10 +47,10 @@ async function runTestSuite() {
   const total = 7;
 
   // ──────────────────────────────────────────────────────────────────────────
-  // TEST 1: Setup & Automatic Timers for 6, 9, 12, 15 Objects
+  // TEST 1: Setup & Player-Controlled Drawing Timer (+ / -), Limits & Lock
   // ──────────────────────────────────────────────────────────────────────────
   try {
-    console.log('▶ TEST 1: Setup & Automatic Timers for 6, 9, 12, 15 Objects');
+    console.log('▶ TEST 1: Setup & Player-Controlled Drawing Timer (+ / -), Limits & Lock');
     const mockIO = createMockIO();
     const rm = new RoomManager();
     const { room } = rm.createRoom('tv-sock-1', 'TV Host', 'draw-identify');
@@ -61,23 +61,43 @@ async function runTestSuite() {
     // Verify default settings
     const defaultSettings = engine.getSettings();
     assert(defaultSettings.objectCount === 12, 'Default object count should be 12');
-    assert(getAutoDrawingTimer(6) === 8, '6 objects -> 8s timer');
-    assert(getAutoDrawingTimer(9) === 12, '9 objects -> 12s timer');
-    assert(getAutoDrawingTimer(12) === 15, '12 objects -> 15s timer');
-    assert(getAutoDrawingTimer(15) === 20, '15 objects -> 20s timer');
+    assert(defaultSettings.drawingDurationSeconds === DEFAULT_DRAWING_SECONDS, 'Default drawing timer should be 15s');
+    assert(defaultSettings.identificationDurationSeconds === 60, 'Identification timer should be 60s');
 
-    // Test updating settings to 6 objects
+    // Player increases timer by 1s (+ button) and sets custom time (e.g. 22s)
+    engine.updateSettings({ drawingDurationSeconds: 16 });
+    assert(engine.getSettings().drawingDurationSeconds === 16, 'Timer should increase to 16s');
+    engine.updateSettings({ drawingDurationSeconds: 22 });
+    assert(engine.getSettings().drawingDurationSeconds === 22, 'Timer should update to 22s');
+
+    // Changing objectCount must NOT overwrite or auto-calculate drawingDurationSeconds
     engine.updateSettings({ objectCount: 6, language: 'malayalam' });
     assert(engine.getSettings().objectCount === 6, 'Should update to 6 objects');
-    assert(engine.getSettings().drawingDurationSeconds === 8, 'Should auto-calculate 8s drawing timer');
+    assert(engine.getSettings().drawingDurationSeconds === 22, 'Timer must remain 22s when objectCount changes to 6');
     assert(engine.getSettings().language === 'malayalam', 'Should support Malayalam language mode');
 
-    // Test updating settings to 15 objects
     engine.updateSettings({ objectCount: 15, language: 'english' });
     assert(engine.getSettings().objectCount === 15, 'Should update to 15 objects');
-    assert(engine.getSettings().drawingDurationSeconds === 20, 'Should auto-calculate 20s drawing timer');
+    assert(engine.getSettings().drawingDurationSeconds === 22, 'Timer must remain 22s when objectCount changes to 15');
 
-    console.log('  ✓ Correctly calculated auto-timers: 6->8s, 9->12s, 12->15s, 15->20s');
+    // Verify min & max clamping
+    engine.updateSettings({ drawingDurationSeconds: 1 });
+    assert(engine.getSettings().drawingDurationSeconds === MIN_DRAWING_SECONDS, `Timer must clamp to min ${MIN_DRAWING_SECONDS}s`);
+    engine.updateSettings({ drawingDurationSeconds: 999 });
+    assert(engine.getSettings().drawingDurationSeconds === MAX_DRAWING_SECONDS, `Timer must clamp to max ${MAX_DRAWING_SECONDS}s`);
+
+    // Set final custom timer (19s), start game, and verify it applies & locks
+    engine.updateSettings({ drawingDurationSeconds: 19 });
+    rm.joinRoom('p1-t1', code, 'Alice');
+    rm.joinRoom('p2-t1', code, 'Bob');
+    engine.startGame();
+
+    assert(engine.getPublicState().drawingDurationSeconds === 19, 'Selected 19s timer should apply to drawing phase');
+    engine.updateSettings({ drawingDurationSeconds: 40 });
+    assert(engine.getSettings().drawingDurationSeconds === 19, 'Timer setting must be locked once game starts');
+    engine.stop();
+
+    console.log('  ✓ Player-controlled timer (+ / -), min/max clamping, independence from objectCount, and game-start lock verified');
     console.log('  ✓ Supported English and Malayalam language modes');
     console.log('✅ TEST 1 PASSED\n');
     passed++;

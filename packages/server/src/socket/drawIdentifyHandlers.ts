@@ -7,14 +7,15 @@ type GameSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
 
 export function registerDrawIdentifyHandlers(io: GameServer, socket: GameSocket, rm: RoomManager) {
 
-  // Host updates game settings
+  // Host or lobby player updates game settings (locked once game starts)
   socket.on('draw-identify:update-settings', (settings) => {
     try {
       const room = rm.getRoomByPlayer(socket.id);
       if (!room || room.gameType !== 'draw-identify') return;
+      if (room.phase !== 'lobby') return;
 
-      const host = room.players.find(p => p.id === socket.id);
-      if (!host?.isHost) return;
+      const player = room.players.find(p => p.id === socket.id);
+      if (!player) return;
 
       const engine = rm.ensureDrawIdentifyEngine(room.code, io);
       engine.updateSettings(settings);

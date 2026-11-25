@@ -3,8 +3,11 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useNavigate } from 'react-router-dom';
 import { getSocket } from '../lib/socket';
 import { useGameStore } from '../store/gameStore';
-import Timer from '../components/Timer';
 import type { DrawIdentifySettings } from '@chitram/shared';
+
+const MIN_DRAWING_SECONDS = 5;
+const MAX_DRAWING_SECONDS = 60;
+const DEFAULT_DRAWING_SECONDS = 15;
 
 interface Props {
   hostIP: string;
@@ -12,7 +15,7 @@ interface Props {
 
 export default function DrawIdentifyTVScreen({ hostIP }: Props) {
   const navigate = useNavigate();
-  const { room, connected, drawIdentifyState, timerRemaining } = useGameStore();
+  const { room, connected, drawIdentifyState } = useGameStore();
 
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -25,8 +28,10 @@ export default function DrawIdentifyTVScreen({ hostIP }: Props) {
   const settings: DrawIdentifySettings = room.drawIdentifySettings ?? {
     objectCount: 12,
     language: 'english',
+    drawingDurationSeconds: DEFAULT_DRAWING_SECONDS,
     identificationDurationSeconds: 60,
   };
+  const drawingSeconds = settings.drawingDurationSeconds ?? DEFAULT_DRAWING_SECONDS;
 
   function updateSettings(patch: Partial<DrawIdentifySettings>) {
     getSocket().emit('draw-identify:update-settings', patch);
@@ -144,8 +149,6 @@ export default function DrawIdentifyTVScreen({ hostIP }: Props) {
     const displayUrl = isHostedDomain
       ? window.location.host
       : (hostIP ? `http://${hostIP}:3000` : 'getting IP…');
-
-    const autoTime = settings.objectCount === 6 ? 8 : settings.objectCount === 9 ? 12 : settings.objectCount === 12 ? 15 : 20;
 
     return (
       <div className="h-full flex flex-col bg-gradient-to-br from-gray-950 via-teal-950/30 to-gray-950 overflow-hidden select-none">
@@ -298,19 +301,53 @@ export default function DrawIdentifyTVScreen({ hostIP }: Props) {
                 </div>
               </div>
 
-              {/* Timing Display */}
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-xs space-y-2">
+              {/* Drawing Timer Control */}
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-white/60">Drawing Phase Timer:</span>
-                  <span className="text-teal-300 font-mono font-bold text-sm">{autoTime}s (Automatic)</span>
+                  <div>
+                    <span className="text-white/80 font-bold text-xs uppercase tracking-wider block">
+                      Drawing Phase Timer
+                    </span>
+                    <span className="text-white/40 text-[11px]">
+                      {MIN_DRAWING_SECONDS}s – {MAX_DRAWING_SECONDS}s per round
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateSettings({
+                          drawingDurationSeconds: Math.max(MIN_DRAWING_SECONDS, drawingSeconds - 1),
+                        })
+                      }
+                      disabled={drawingSeconds <= MIN_DRAWING_SECONDS}
+                      aria-label="Decrease drawing timer"
+                      className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed text-white font-black text-lg flex items-center justify-center transition-all"
+                    >
+                      −
+                    </button>
+                    <span className="min-w-[3.5rem] text-center text-teal-300 font-mono font-black text-xl tabular-nums">
+                      {drawingSeconds}s
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateSettings({
+                          drawingDurationSeconds: Math.min(MAX_DRAWING_SECONDS, drawingSeconds + 1),
+                        })
+                      }
+                      disabled={drawingSeconds >= MAX_DRAWING_SECONDS}
+                      aria-label="Increase drawing timer"
+                      className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed text-white font-black text-lg flex items-center justify-center transition-all"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center pt-2 border-t border-white/10 text-xs">
                   <span className="text-white/60">Identification Timer:</span>
                   <span className="text-teal-300 font-mono font-bold text-sm">60s</span>
                 </div>
-                <p className="text-[11px] text-white/40 pt-1 border-t border-white/10">
-                  ⚡ Fast-paced frenzy! Drawer sketches rapid doodles; opposing team identifies them on TV.
-                </p>
               </div>
             </div>
 
@@ -430,6 +467,48 @@ export default function DrawIdentifyTVScreen({ hostIP }: Props) {
     objectCount === 12 ? 'grid-cols-4 grid-rows-3' :
     'grid-cols-5 grid-rows-3';
 
+  // Full-screen clean white drawing grid during drawing & identification phases
+  if (roundPhase === 'drawing' || roundPhase === 'identification') {
+    return (
+      <div className="h-full w-full bg-white p-4 select-none overflow-hidden flex items-center justify-center">
+        <div className={`grid ${gridColsClass} gap-3 w-full h-full`}>
+          {Array.from({ length: objectCount }).map((_, idx) => {
+            const drawing = drawings[idx];
+            const isIdentified = objectList[idx]?.isIdentified;
+
+            return (
+              <div
+                key={idx}
+                className={`relative w-full h-full min-h-0 min-w-0 rounded-xl bg-white flex items-center justify-center overflow-hidden transition-all duration-200 ${
+                  isIdentified
+                    ? 'ring-4 ring-green-500 border-2 border-green-500'
+                    : 'border-2 border-gray-200'
+                }`}
+              >
+                {isIdentified && (
+                  <div
+                    className="absolute top-2 right-2 z-20 w-8 h-8 rounded-full bg-green-500 text-white font-black text-lg flex items-center justify-center shadow-md"
+                    aria-label="Identified"
+                  >
+                    ✓
+                  </div>
+                )}
+
+                {drawing && (
+                  <img
+                    src={drawing.dataUrl}
+                    alt=""
+                    className="w-full h-full object-contain p-2 select-none pointer-events-none"
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full flex flex-col bg-gray-950 select-none overflow-hidden relative">
       {/* ── Top Header Bar ── */}
@@ -453,16 +532,12 @@ export default function DrawIdentifyTVScreen({ hostIP }: Props) {
           </span>
         </div>
 
-        {/* Center: Timer or Status */}
+        {/* Center: Status */}
         <div className="flex items-center gap-3 bg-white/5 border border-white/10 px-6 py-1 rounded-2xl shadow-inner">
           <span className="text-white/40 text-xs uppercase tracking-wider font-bold">
-            {roundPhase === 'drawing' ? 'Draw Timer:' : roundPhase === 'identification' ? 'Identify Timer:' : 'Round Status:'}
+            Round Status:
           </span>
-          {roundPhase === 'round-end' ? (
-            <span className="text-amber-400 font-bold text-sm">Round Complete</span>
-          ) : (
-            <Timer remaining={timerRemaining} total={roundPhase === 'drawing' ? drawIdentifyState.drawingDurationSeconds : 60} large />
-          )}
+          <span className="text-amber-400 font-bold text-sm">Round Complete</span>
         </div>
 
         {/* Right: Drawer name & Controls */}
@@ -486,33 +561,11 @@ export default function DrawIdentifyTVScreen({ hostIP }: Props) {
       </div>
 
       {/* ── Phase Announcement Banner ── */}
-      <div className={`px-10 py-2 flex items-center justify-between border-b transition-all ${
-        roundPhase === 'drawing'
-          ? 'bg-amber-950/30 border-amber-500/20 text-amber-200'
-          : roundPhase === 'identification'
-          ? 'bg-emerald-950/30 border-emerald-500/20 text-emerald-200'
-          : 'bg-purple-950/30 border-purple-500/20 text-purple-200'
-      }`}>
+      <div className="px-10 py-2 flex items-center justify-between border-b transition-all bg-purple-950/30 border-purple-500/20 text-purple-200">
         <div className="flex items-center gap-3">
-          <span className="text-xl">
-            {roundPhase === 'drawing' ? '⏳' : roundPhase === 'identification' ? '🔍' : '🏁'}
-          </span>
+          <span className="text-xl">🏁</span>
           <p className="text-xs font-bold text-white">
-            {roundPhase === 'drawing' && (
-              <>
-                <span className="text-amber-300 underline font-black">{currentDrawerName}</span> is drawing rapidly! Opposing players: Read out object names aloud!
-              </>
-            )}
-            {roundPhase === 'identification' && (
-              <>
-                🗣️ Opposing players call out object names! 🕵️ <span className="text-emerald-300 font-black">{currentDrawerName}</span> points to the drawings! Tick matching objects on phones!
-              </>
-            )}
-            {roundPhase === 'round-end' && (
-              <>
-                Round {currentRound} Summary! Ready for next round or finish game.
-              </>
-            )}
+            Round {currentRound} Summary! Ready for next round or finish game.
           </p>
         </div>
 
@@ -574,12 +627,8 @@ export default function DrawIdentifyTVScreen({ hostIP }: Props) {
                     />
                   ) : (
                     <div className="text-center p-2">
-                      <span className="text-2xl text-white/20 block mb-1">
-                        {roundPhase === 'drawing' && idx === submittedCount ? '✏️' : '◻️'}
-                      </span>
-                      <p className="text-[11px] font-bold text-white/30">
-                        {roundPhase === 'drawing' && idx === submittedCount ? 'Drawing now…' : 'Empty'}
-                      </p>
+                      <span className="text-2xl text-white/20 block mb-1">◻️</span>
+                      <p className="text-[11px] font-bold text-white/30">Empty</p>
                     </div>
                   )}
                 </div>

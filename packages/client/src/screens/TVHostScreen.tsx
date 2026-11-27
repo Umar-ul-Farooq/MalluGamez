@@ -12,6 +12,7 @@ import EmojiTVScreen from './EmojiTVScreen';
 import DrawIdentifyTVScreen from './DrawIdentifyTVScreen';
 import FastestFingerTVScreen from './FastestFingerTVScreen';
 import LastWordTVScreen from './LastWordTVScreen';
+import CinemaClueTVScreen from './CinemaClueTVScreen';
 import type { RoomSettings, GameType } from '@chitram/shared';
 
 const TIMER_OPTIONS = [30, 60, 90, 120];
@@ -203,6 +204,11 @@ export default function TVHostScreen() {
   // If this room is for Last Word Standing, render LastWord TV Screen
   if (room.gameType === 'last-word') {
     return <LastWordTVScreen hostIP={hostIP} />;
+  }
+
+  // If this room is for Cinema Clue Battle, render CinemaClue TV Screen
+  if (room.gameType === 'cinema-clue') {
+    return <CinemaClueTVScreen hostIP={hostIP} />;
   }
 
   const players = room.players.filter(p => !p.isHost);

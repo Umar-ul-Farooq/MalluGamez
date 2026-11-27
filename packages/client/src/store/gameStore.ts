@@ -12,6 +12,7 @@ import type {
   DrawIdentifyObjectItem,
   FastestFingerPublicState,
   LastWordPublicState,
+  CinemaCluePublicState,
 } from '@chitram/shared';
 
 export interface Toast {
@@ -77,6 +78,18 @@ interface GameState {
     seq: number;
   } | null;
 
+  // ─── Cinema Clue Battle In-game ───────────────────────────────────────────
+  cinemaClueState: CinemaCluePublicState | null;
+  cinemaClueGuessFeedback: {
+    questionId: string;
+    clueIndex: number;
+    isCorrect: boolean;
+    isDuplicate?: boolean;
+    message: string;
+    points?: number;
+    seq: number;
+  } | null;
+
   // ─── UI ───────────────────────────────────────────────────────────────────
   toasts: Toast[];
 
@@ -107,6 +120,15 @@ interface GameState {
     questionId: string;
     status: 'VALID' | 'INVALID' | 'UNCERTAIN' | 'API_ERROR' | 'TARGET_HIT';
     message: string;
+  } | null) => void;
+  setCinemaClueState: (s: CinemaCluePublicState) => void;
+  setCinemaClueGuessFeedback: (f: {
+    questionId: string;
+    clueIndex: number;
+    isCorrect: boolean;
+    isDuplicate?: boolean;
+    message: string;
+    points?: number;
   } | null) => void;
   handleCharadesRoundEnd: (p: {
     result: 'correct' | 'timeout';
@@ -149,6 +171,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   fastestFingerGuessFeedback: null,
   lastWordState: null,
   lastWordFeedback: null,
+  cinemaClueState: null,
+  cinemaClueGuessFeedback: null,
   toasts: [],
 
   setMyId:      (id) => set({ myId: id }),
@@ -203,6 +227,13 @@ export const useGameStore = create<GameState>((set, get) => ({
         ? { ...f, seq: (state.lastWordFeedback?.seq ?? 0) + 1 }
         : null,
     })),
+  setCinemaClueState: (s) => set({ cinemaClueState: s }),
+  setCinemaClueGuessFeedback: (f) =>
+    set(state => ({
+      cinemaClueGuessFeedback: f
+        ? { ...f, seq: (state.cinemaClueGuessFeedback?.seq ?? 0) + 1 }
+        : null,
+    })),
   handleCharadesRoundEnd: (p) => {
     set({ lastCharadesRoundEnd: p, secretMovie: null });
     const teamName = p.pointsAwardedTo === 'A'
@@ -232,7 +263,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     hasVotedImposter: false, emojiState: null, emojiGuessFeedback: null,
     drawIdentifyState: null, drawIdentifySecretList: [], lastTickedObject: null,
     fastestFingerState: null, fastestFingerGuessFeedback: null,
-    lastWordState: null, lastWordFeedback: null, toasts: [],
+    lastWordState: null, lastWordFeedback: null,
+    cinemaClueState: null, cinemaClueGuessFeedback: null, toasts: [],
   }),
 }));
 

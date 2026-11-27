@@ -216,6 +216,12 @@ export function useGameEvents() {
       store.setLastWordFeedback(res);
     });
 
+    // ── Cinema Clue Battle Events ──
+    socket.on('cinema-clue:state', store.setCinemaClueState);
+    socket.on('cinema-clue:guess-result', (res) => {
+      store.setCinemaClueGuessFeedback(res);
+    });
+
     // If already connected when this effect runs
     if (socket.connected) onConnect();
 
@@ -249,6 +255,8 @@ export function useGameEvents() {
       socket.off('fastest-finger:guess-result');
       socket.off('last-word:state');
       socket.off('last-word:answer-feedback');
+      socket.off('cinema-clue:state');
+      socket.off('cinema-clue:guess-result');
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

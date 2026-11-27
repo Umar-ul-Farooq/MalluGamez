@@ -8,6 +8,7 @@ import EmojiMobileScreen from './EmojiMobileScreen';
 import DrawIdentifyMobileScreen from './DrawIdentifyMobileScreen';
 import FastestFingerMobileScreen from './FastestFingerMobileScreen';
 import LastWordMobileScreen from './LastWordMobileScreen';
+import CinemaClueMobileScreen from './CinemaClueMobileScreen';
 
 type JoinState = 'form' | 'waiting';
 
@@ -173,6 +174,11 @@ export default function LobbyScreen() {
   // If this room is for Last Word Standing, render LastWord Mobile Controller
   if (room.gameType === 'last-word') {
     return <LastWordMobileScreen />;
+  }
+
+  // If this room is for Cinema Clue Battle, render CinemaClue Mobile Controller
+  if (room.gameType === 'cinema-clue') {
+    return <CinemaClueMobileScreen />;
   }
 
   const players = room.players.filter(p => !p.isHost);

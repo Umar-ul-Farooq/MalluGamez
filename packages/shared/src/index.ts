@@ -1,6 +1,6 @@
 // ─── Game Platform ──────────────────────────────────────────────────────────
 
-export type GameType = 'pictionary' | 'charades' | 'imposter' | 'emoji' | 'draw-identify' | 'fastest-finger' | 'last-word';
+export type GameType = 'pictionary' | 'charades' | 'imposter' | 'emoji' | 'draw-identify' | 'fastest-finger' | 'last-word' | 'cinema-clue';
 
 // ─── Players ────────────────────────────────────────────────────────────────
 
@@ -39,6 +39,7 @@ export interface Room {
   drawIdentifySettings?: DrawIdentifySettings;
   fastestFingerSettings?: FastestFingerSettings;
   lastWordSettings?: LastWordSettings;
+  cinemaClueSettings?: CinemaClueSettings;
   currentRound: number;
   currentDrawerId: string | null;
   currentWord: string | null;       // only sent to drawer
@@ -49,6 +50,7 @@ export interface Room {
   drawIdentifyState?: DrawIdentifyPublicState;
   fastestFingerState?: FastestFingerPublicState;
   lastWordState?: LastWordPublicState;
+  cinemaClueState?: CinemaCluePublicState;
   sessionId?: string | null;
   hostToken?: string;
 }
@@ -401,6 +403,65 @@ export interface LastWordPublicState {
   winnerName: string | null;
 }
 
+// ─── Cinema Clue Battle Types ───────────────────────────────────────────────
+
+export type CinemaClueMode = 'buzz-in' | 'alternate-question' | 'alternate-clue';
+export type CinemaClueDifficulty = 'mixed' | 'easy' | 'medium' | 'hard';
+export type CinemaClueRoundPhase = 'question' | 'reveal' | 'game-end';
+
+export interface CinemaClueSettings {
+  mode: CinemaClueMode;
+  clueDurationSeconds: number; // 10..40 in 5s increments, default 20
+  totalQuestions: number;      // default 10
+  difficulty: CinemaClueDifficulty;
+  teamAName: string;
+  teamBName: string;
+}
+
+export interface CinemaClueGuessedItem {
+  id: string;
+  team: 'A' | 'B';
+  playerName: string;
+  guess: string;
+  isCorrect: boolean;
+  clueNumber: 1 | 2 | 3 | 4;
+}
+
+export interface CinemaClueRevealInfo {
+  title: string;
+  manglish: string;
+  year: number;
+  winnerTeam: 'A' | 'B' | null;
+  winnerName: string | null;
+  pointsAwarded: number;
+  solvedAtClue: number | null;
+}
+
+export interface CinemaCluePublicState {
+  sessionId: string;
+  questionId: string;
+  questionNumber: number;
+  totalQuestions: number;
+  mode: CinemaClueMode;
+  clueDurationSeconds: number;
+  roundPhase: CinemaClueRoundPhase;
+  currentClueIndex: 0 | 1 | 2 | 3;
+  clues: string[];
+  potentialPoints: 10 | 7 | 5 | 3;
+  teamAName: string;
+  teamBName: string;
+  teamAScore: number;
+  teamBScore: number;
+  teamsLocked: boolean;
+  activeTeam: 'A' | 'B' | null;
+  startingTeamForQuestion: 'A' | 'B';
+  buzzResponseWindowActive: boolean;
+  teamAGuessedThisClue: boolean;
+  teamBGuessedThisClue: boolean;
+  guessedMovies: CinemaClueGuessedItem[];
+  revealInfo: CinemaClueRevealInfo | null;
+}
+
 // ─── Socket.IO Events (Client → Server) ─────────────────────────────────────
 
 export interface ClientToServerEvents {
@@ -476,6 +537,14 @@ export interface ClientToServerEvents {
   'last-word:start-game': () => void; // host only
   'last-word:submit-answer': (payload: { answer: string; sessionId: string; questionId: string }) => void;
   'last-word:restart-game': () => void; // host only
+
+  // ── Cinema Clue Battle Events ──
+  'cinema-clue:select-team': (payload: { team: 'A' | 'B' }) => void;
+  'cinema-clue:move-player': (payload: { playerId: string; team: 'A' | 'B' }) => void; // host only
+  'cinema-clue:update-settings': (payload: Partial<CinemaClueSettings>) => void; // host only
+  'cinema-clue:start-game': () => void; // host only
+  'cinema-clue:submit-guess': (payload: { guess: string; sessionId: string; questionId: string; clueIndex: number }) => void;
+  'cinema-clue:restart-game': () => void; // host only
 }
 
 // ─── Socket.IO Events (Server → Client) ─────────────────────────────────────
@@ -546,6 +615,17 @@ export interface ServerToClientEvents {
     questionId: string;
     status: 'VALID' | 'INVALID' | 'UNCERTAIN' | 'API_ERROR' | 'TARGET_HIT';
     message: string;
+  }) => void;
+
+  // Cinema Clue Battle
+  'cinema-clue:state': (state: CinemaCluePublicState) => void;
+  'cinema-clue:guess-result': (payload: {
+    questionId: string;
+    clueIndex: number;
+    isCorrect: boolean;
+    isDuplicate?: boolean;
+    message: string;
+    points?: number;
   }) => void;
 }
 

@@ -47,6 +47,9 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rm: Roo
       if (gameType === 'last-word') {
         rm.ensureLastWordEngine(room.code, io);
       }
+      if (gameType === 'cinema-clue') {
+        rm.ensureCinemaClueEngine(room.code, io);
+      }
       if (room.hostToken) {
         socket.emit('room:host-token', {
           hostToken: room.hostToken,
@@ -98,6 +101,10 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rm: Roo
         const engine = rm.ensureLastWordEngine(room.code, io);
         socket.emit('last-word:state', engine.getPublicState());
       }
+      if (room.gameType === 'cinema-clue') {
+        const engine = rm.ensureCinemaClueEngine(room.code, io);
+        socket.emit('cinema-clue:state', engine.getPublicState());
+      }
       console.log(`[room] Host socket reclaimed room ${room.code}`);
     } catch (err: any) {
       socket.emit('room:error', err.message);
@@ -143,6 +150,10 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rm: Roo
       if (room.gameType === 'last-word') {
         const engine = rm.ensureLastWordEngine(room.code, io);
         socket.emit('last-word:state', engine.getPublicState());
+      }
+      if (room.gameType === 'cinema-clue') {
+        const engine = rm.ensureCinemaClueEngine(room.code, io);
+        socket.emit('cinema-clue:state', engine.getPublicState());
       }
       console.log(`[room] ${playerName} joined room ${room.code}`);
     } catch (err: any) {

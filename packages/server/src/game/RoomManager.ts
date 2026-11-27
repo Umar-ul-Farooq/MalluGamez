@@ -1,4 +1,4 @@
-import type { Room, Player, RoomSettings, RoomPublicState, GameType, CharadesSettings, ImposterSettings, EmojiSettings, DrawIdentifySettings, FastestFingerSettings, LastWordSettings } from '@chitram/shared';
+import type { Room, Player, RoomSettings, RoomPublicState, GameType, CharadesSettings, ImposterSettings, EmojiSettings, DrawIdentifySettings, FastestFingerSettings, LastWordSettings, CinemaClueSettings } from '@chitram/shared';
 import type { GameServer } from '../socket/index';
 import { GameEngine } from './GameEngine';
 import { WordBank } from './WordBank';
@@ -8,6 +8,7 @@ import { EmojiEngine } from './EmojiEngine';
 import { DrawIdentifyEngine } from './DrawIdentifyEngine';
 import { FastestFingerEngine } from './FastestFingerEngine';
 import { LastWordEngine } from './LastWordEngine';
+import { CinemaClueEngine } from './CinemaClueEngine';
 
 function generateRoomCode(): string {
   return Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -23,6 +24,7 @@ export class RoomManager {
   private drawIdentifyEngines = new Map<string, DrawIdentifyEngine>();
   private fastestFingerEngines = new Map<string, FastestFingerEngine>();
   private lastWordEngines = new Map<string, LastWordEngine>();
+  private cinemaClueEngines = new Map<string, CinemaClueEngine>();
   private disconnectTimeouts = new Map<string, NodeJS.Timeout>();
 
   // ─── Create / Join ──────────────────────────────────────────────────────
@@ -90,6 +92,14 @@ export class RoomManager {
       lastWordSettings: gameType === 'last-word' ? {
         turnDurationSeconds: 15,
         difficulty: 'mixed',
+      } : undefined,
+      cinemaClueSettings: gameType === 'cinema-clue' ? {
+        mode: 'buzz-in',
+        clueDurationSeconds: 20,
+        totalQuestions: 10,
+        difficulty: 'mixed',
+        teamAName: 'Team A',
+        teamBName: 'Team B',
       } : undefined,
       currentRound: 0,
       currentDrawerId: null,
@@ -227,6 +237,12 @@ export class RoomManager {
       const lastWordEngine = this.lastWordEngines.get(code);
       if (lastWordEngine) {
         lastWordEngine.handlePlayerReconnect(oldSocketId, socketId, existingPlayer);
+      }
+
+      // Notify Cinema Clue Battle engine of reconnection
+      const cinemaClueEngine = this.cinemaClueEngines.get(code);
+      if (cinemaClueEngine) {
+        cinemaClueEngine.handlePlayerReconnect(oldSocketId, socketId, existingPlayer);
       }
 
       return { room, player: existingPlayer };
@@ -400,6 +416,31 @@ export class RoomManager {
     return engine;
   }
 
+  // ─── Cinema Clue Battle Integration ───────────────────────────────────────
+
+  getCinemaClueEngine(code: string): CinemaClueEngine | undefined {
+    return this.cinemaClueEngines.get(code);
+  }
+
+  ensureCinemaClueEngine(code: string, io: GameServer): CinemaClueEngine {
+    let engine = this.cinemaClueEngines.get(code);
+    if (!engine) {
+      const room = this.rooms.get(code);
+      if (!room) throw new Error('Room not found');
+      const settings: CinemaClueSettings = room.cinemaClueSettings ?? {
+        mode: 'buzz-in',
+        clueDurationSeconds: 20,
+        totalQuestions: 10,
+        difficulty: 'mixed',
+        teamAName: 'Team A',
+        teamBName: 'Team B',
+      };
+      engine = new CinemaClueEngine(room, io, settings);
+      this.cinemaClueEngines.set(code, engine);
+    }
+    return engine;
+  }
+
   // ─── Settings ───────────────────────────────────────────────────────────
 
   updateSettings(code: string, settings: RoomSettings) {
@@ -561,6 +602,7 @@ export class RoomManager {
     room.drawIdentifyState = undefined;
     room.fastestFingerState = undefined;
     room.lastWordState = undefined;
+    room.cinemaClueState = undefined;
 
     // Reset and stop Imposter engine if present
     const imposterEngine = this.imposterEngines.get(code);
@@ -576,6 +618,7 @@ export class RoomManager {
     this.drawIdentifyEngines.get(code)?.stop();
     this.fastestFingerEngines.get(code)?.stop();
     this.lastWordEngines.get(code)?.stop();
+    this.cinemaClueEngines.get(code)?.stop();
 
     // Cancel all disconnect timers for this room
     for (const [key, timer] of this.disconnectTimeouts.entries()) {
@@ -623,6 +666,8 @@ export class RoomManager {
     this.fastestFingerEngines.delete(code);
     this.lastWordEngines.get(code)?.stop();
     this.lastWordEngines.delete(code);
+    this.cinemaClueEngines.get(code)?.stop();
+    this.cinemaClueEngines.delete(code);
   }
 
   // ─── Helpers ────────────────────────────────────────────────────────────

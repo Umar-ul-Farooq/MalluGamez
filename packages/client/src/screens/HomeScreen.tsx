@@ -138,6 +138,22 @@ const GAMES: GameItem[] = [
     status: 'live',
     hostUrl: '/tv?game=last-word',
   },
+  {
+    id: 'cinema-clue',
+    title: 'Cinema Clue Battle',
+    malayalamTitle: 'സിനിമ ക്ലൂ ബാറ്റിൽ',
+    subtitle: '4 സൂചനകളിൽ നിന്ന് സിനിമ കണ്ടെത്തൂ!',
+    description: 'Team A vs Team B Malayalam movie battle across 4 progressive clues (10/7/5/3 pts). Play Buzz In or Alternate Turn modes!',
+    emoji: '🎬🔍',
+    mode: 'multiplayer',
+    playerCount: '2 Teams (2–16 Players)',
+    badge: 'NEW',
+    badgeColor: 'bg-indigo-500 text-white font-black',
+    gradient: 'from-indigo-950/70 via-cyan-950/30 to-indigo-950/70',
+    borderColor: 'border-indigo-500/50 hover:border-indigo-400',
+    status: 'live',
+    hostUrl: '/tv?game=cinema-clue',
+  },
 
   // ─── Single Player Coming Soon Games ───
   {

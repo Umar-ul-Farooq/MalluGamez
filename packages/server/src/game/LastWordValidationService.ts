@@ -27,7 +27,9 @@ export type AiEvaluatorFn = (params: {
   constraintsText: string;
 }) => Promise<GeminiJsonAssessment>;
 
-const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash';
+const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite';
+const FALLBACK_GEMINI_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.8-flash'];
+const PER_MODEL_TIMEOUT_MS = 5500;
 const API_TIMEOUT_MS = 15000;
 const MAX_CACHE_ENTRIES = 2000;
 
@@ -72,8 +74,9 @@ export class LastWordValidationService {
     this.timeoutMs = options?.timeoutMs ?? API_TIMEOUT_MS;
   }
 
-  private getModelName(): string {
-    return (process.env.GEMINI_MODEL || '').trim() || DEFAULT_GEMINI_MODEL;
+  private getCandidateModels(): string[] {
+    const primary = (process.env.GEMINI_MODEL || '').trim() || DEFAULT_GEMINI_MODEL;
+    return Array.from(new Set([primary, ...FALLBACK_GEMINI_MODELS]));
   }
 
   private getAiClient(): GoogleGenAI | null {
@@ -86,7 +89,13 @@ export class LastWordValidationService {
       return null;
     }
     if (!this.aiClient) {
-      this.aiClient = new GoogleGenAI({ apiKey });
+      this.aiClient = new GoogleGenAI({
+        apiKey,
+        httpOptions: {
+          timeout: PER_MODEL_TIMEOUT_MS,
+          retryOptions: { attempts: 1 },
+        },
+      });
     }
     return this.aiClient;
   }
@@ -369,42 +378,57 @@ export class LastWordValidationService {
           `Submitted Answer: ${submittedAnswer}`,
         ].join('\n');
 
-        const modelName = this.getModelName();
-        const response = await this.withTimeout(
-          client.models.generateContent({
-            model: modelName,
-            contents: userContent,
-            config: {
-              systemInstruction,
-              temperature: 0.1,
-              ...(modelName.startsWith('gemini-3')
-                ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
-                : {}),
-              responseMimeType: 'application/json',
-              responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                  status: {
-                    type: Type.STRING,
-                    enum: ['VALID', 'INVALID', 'UNCERTAIN'],
-                  },
-                  short_reason: {
-                    type: Type.STRING,
+        const candidates = this.getCandidateModels();
+        let lastErr: unknown = null;
+
+        for (const modelName of candidates) {
+          try {
+            const response = await this.withTimeout(
+              client.models.generateContent({
+                model: modelName,
+                contents: userContent,
+                config: {
+                  systemInstruction,
+                  temperature: 0.1,
+                  ...(modelName.startsWith('gemini-3')
+                    ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
+                    : {}),
+                  responseMimeType: 'application/json',
+                  responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                      status: {
+                        type: Type.STRING,
+                        enum: ['VALID', 'INVALID', 'UNCERTAIN'],
+                      },
+                      short_reason: {
+                        type: Type.STRING,
+                      },
+                    },
+                    required: ['status', 'short_reason'],
                   },
                 },
-                required: ['status', 'short_reason'],
-              },
-            },
-          }),
-          this.timeoutMs
-        );
+              }),
+              Math.min(this.timeoutMs, PER_MODEL_TIMEOUT_MS)
+            );
 
-        const rawText = (response as any)?.text;
-        if (typeof rawText !== 'string' || !rawText.trim()) {
-          console.error('[LastWordValidation] Gemini returned empty response text');
+            const rawText = (response as any)?.text;
+            if (typeof rawText !== 'string' || !rawText.trim()) {
+              console.warn(`[LastWordValidation] ${modelName} returned empty response text`);
+              continue;
+            }
+            parsed = JSON.parse(rawText);
+            break;
+          } catch (err: any) {
+            lastErr = err;
+            console.warn(`[LastWordValidation] Model ${modelName} failed for ${question.id}: ${err?.message || String(err)}`);
+          }
+        }
+
+        if (!parsed) {
+          if (lastErr) throw lastErr;
           return null;
         }
-        parsed = JSON.parse(rawText);
       }
 
       // Strictly validate JSON structure before accepting it

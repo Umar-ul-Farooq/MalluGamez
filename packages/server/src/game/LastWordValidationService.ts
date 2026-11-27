@@ -29,7 +29,7 @@ export type AiEvaluatorFn = (params: {
 
 const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite';
 const FALLBACK_GEMINI_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.8-flash'];
-const PER_MODEL_TIMEOUT_MS = 5500;
+const PER_MODEL_TIMEOUT_MS = 10500;
 const API_TIMEOUT_MS = 15000;
 const MAX_CACHE_ENTRIES = 2000;
 
@@ -92,7 +92,6 @@ export class LastWordValidationService {
       this.aiClient = new GoogleGenAI({
         apiKey,
         httpOptions: {
-          timeout: PER_MODEL_TIMEOUT_MS,
           retryOptions: { attempts: 1 },
         },
       });

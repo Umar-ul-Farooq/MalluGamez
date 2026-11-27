@@ -27,7 +27,7 @@ export type AiEvaluatorFn = (params: {
   constraintsText: string;
 }) => Promise<GeminiJsonAssessment>;
 
-const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
+const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash';
 const API_TIMEOUT_MS = 8000;
 const MAX_CACHE_ENTRIES = 2000;
 

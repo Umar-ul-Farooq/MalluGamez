@@ -1,6 +1,6 @@
 // ─── Game Platform ──────────────────────────────────────────────────────────
 
-export type GameType = 'pictionary' | 'charades' | 'imposter' | 'emoji' | 'draw-identify' | 'fastest-finger';
+export type GameType = 'pictionary' | 'charades' | 'imposter' | 'emoji' | 'draw-identify' | 'fastest-finger' | 'last-word';
 
 // ─── Players ────────────────────────────────────────────────────────────────
 
@@ -38,6 +38,7 @@ export interface Room {
   emojiSettings?: EmojiSettings;
   drawIdentifySettings?: DrawIdentifySettings;
   fastestFingerSettings?: FastestFingerSettings;
+  lastWordSettings?: LastWordSettings;
   currentRound: number;
   currentDrawerId: string | null;
   currentWord: string | null;       // only sent to drawer
@@ -47,6 +48,7 @@ export interface Room {
   emojiState?: EmojiPublicState;
   drawIdentifyState?: DrawIdentifyPublicState;
   fastestFingerState?: FastestFingerPublicState;
+  lastWordState?: LastWordPublicState;
   sessionId?: string | null;
   hostToken?: string;
 }
@@ -348,6 +350,57 @@ export interface FastestFingerPublicState {
   correctCounts: Record<string, number>;
 }
 
+// ─── Last Word Standing Types ────────────────────────────────────────────────
+
+export interface LastWordSettings {
+  turnDurationSeconds: 10 | 15 | 20 | 30;
+  difficulty: 'mixed' | 'Easy' | 'Medium' | 'Hard';
+}
+
+export type LastWordRoundPhase =
+  | 'active'      // current turn player answering
+  | 'eliminated'  // brief reveal showing eliminated player (target hit or timeout)
+  | 'game-end';   // last player standing wins!
+
+export interface LastWordSubmissionEntry {
+  playerId: string;
+  playerName: string;
+  answer: string;
+  outcome: 'survived' | 'eliminated';
+}
+
+export interface LastWordPublicState {
+  sessionId: string;
+  questionId: string;
+  roundNumber: number;
+  roundPhase: LastWordRoundPhase;
+  prompt: string;
+  category: string;
+  difficulty: string;
+  questionType: string;
+  turnDurationSeconds: number;
+  currentTurnPlayerId: string | null;
+  currentTurnPlayerName: string | null;
+  isValidating: boolean;
+  survivorIds: string[];
+  eliminatedPlayerIds: string[];
+  usedAnswers: string[];
+  recentSubmissions: LastWordSubmissionEntry[];
+  eliminatedThisTurn: {
+    playerId: string;
+    playerName: string;
+    reason: 'target-hit' | 'timeout';
+    submittedAnswer?: string;
+    revealedTarget?: string;
+  } | null;
+  lastSafeEvent: {
+    playerName: string;
+    answer: string;
+  } | null;
+  winnerId: string | null;
+  winnerName: string | null;
+}
+
 // ─── Socket.IO Events (Client → Server) ─────────────────────────────────────
 
 export interface ClientToServerEvents {
@@ -417,6 +470,12 @@ export interface ClientToServerEvents {
   'fastest-finger:start-game': () => void; // host only
   'fastest-finger:submit-guess': (payload: { guess: string; sessionId: string; questionId: string }) => void;
   'fastest-finger:restart-game': () => void; // host only
+
+  // ── Last Word Standing Events ──
+  'last-word:update-settings': (payload: Partial<LastWordSettings>) => void; // host only
+  'last-word:start-game': () => void; // host only
+  'last-word:submit-answer': (payload: { answer: string; sessionId: string; questionId: string }) => void;
+  'last-word:restart-game': () => void; // host only
 }
 
 // ─── Socket.IO Events (Server → Client) ─────────────────────────────────────
@@ -479,6 +538,14 @@ export interface ServerToClientEvents {
     isCorrect: boolean;
     message: string;
     points?: number;
+  }) => void;
+
+  // Last Word Standing
+  'last-word:state': (state: LastWordPublicState) => void;
+  'last-word:answer-feedback': (payload: {
+    questionId: string;
+    status: 'VALID' | 'INVALID' | 'UNCERTAIN' | 'API_ERROR' | 'TARGET_HIT';
+    message: string;
   }) => void;
 }
 

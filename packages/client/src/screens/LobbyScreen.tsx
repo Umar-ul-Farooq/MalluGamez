@@ -7,6 +7,7 @@ import ImposterMobileScreen from './ImposterMobileScreen';
 import EmojiMobileScreen from './EmojiMobileScreen';
 import DrawIdentifyMobileScreen from './DrawIdentifyMobileScreen';
 import FastestFingerMobileScreen from './FastestFingerMobileScreen';
+import LastWordMobileScreen from './LastWordMobileScreen';
 
 type JoinState = 'form' | 'waiting';
 
@@ -167,6 +168,11 @@ export default function LobbyScreen() {
   // If this room is for Fastest Finger – Picture Rush, render FastestFinger Mobile Controller
   if (room.gameType === 'fastest-finger') {
     return <FastestFingerMobileScreen />;
+  }
+
+  // If this room is for Last Word Standing, render LastWord Mobile Controller
+  if (room.gameType === 'last-word') {
+    return <LastWordMobileScreen />;
   }
 
   const players = room.players.filter(p => !p.isHost);

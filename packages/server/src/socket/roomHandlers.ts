@@ -44,6 +44,9 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rm: Roo
       if (gameType === 'fastest-finger') {
         rm.ensureFastestFingerEngine(room.code, io);
       }
+      if (gameType === 'last-word') {
+        rm.ensureLastWordEngine(room.code, io);
+      }
       if (room.hostToken) {
         socket.emit('room:host-token', {
           hostToken: room.hostToken,
@@ -91,6 +94,10 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rm: Roo
         const engine = rm.ensureFastestFingerEngine(room.code, io);
         socket.emit('fastest-finger:state', engine.getPublicState());
       }
+      if (room.gameType === 'last-word') {
+        const engine = rm.ensureLastWordEngine(room.code, io);
+        socket.emit('last-word:state', engine.getPublicState());
+      }
       console.log(`[room] Host socket reclaimed room ${room.code}`);
     } catch (err: any) {
       socket.emit('room:error', err.message);
@@ -132,6 +139,10 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rm: Roo
       if (room.gameType === 'fastest-finger') {
         const engine = rm.ensureFastestFingerEngine(room.code, io);
         socket.emit('fastest-finger:state', engine.getPublicState());
+      }
+      if (room.gameType === 'last-word') {
+        const engine = rm.ensureLastWordEngine(room.code, io);
+        socket.emit('last-word:state', engine.getPublicState());
       }
       console.log(`[room] ${playerName} joined room ${room.code}`);
     } catch (err: any) {

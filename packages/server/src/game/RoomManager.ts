@@ -1,4 +1,4 @@
-import type { Room, Player, RoomSettings, RoomPublicState, GameType, CharadesSettings, ImposterSettings, EmojiSettings, DrawIdentifySettings, FastestFingerSettings } from '@chitram/shared';
+import type { Room, Player, RoomSettings, RoomPublicState, GameType, CharadesSettings, ImposterSettings, EmojiSettings, DrawIdentifySettings, FastestFingerSettings, LastWordSettings } from '@chitram/shared';
 import type { GameServer } from '../socket/index';
 import { GameEngine } from './GameEngine';
 import { WordBank } from './WordBank';
@@ -7,6 +7,7 @@ import { ImposterEngine } from './ImposterEngine';
 import { EmojiEngine } from './EmojiEngine';
 import { DrawIdentifyEngine } from './DrawIdentifyEngine';
 import { FastestFingerEngine } from './FastestFingerEngine';
+import { LastWordEngine } from './LastWordEngine';
 
 function generateRoomCode(): string {
   return Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -21,6 +22,7 @@ export class RoomManager {
   private emojiEngines = new Map<string, EmojiEngine>();
   private drawIdentifyEngines = new Map<string, DrawIdentifyEngine>();
   private fastestFingerEngines = new Map<string, FastestFingerEngine>();
+  private lastWordEngines = new Map<string, LastWordEngine>();
   private disconnectTimeouts = new Map<string, NodeJS.Timeout>();
 
   // ─── Create / Join ──────────────────────────────────────────────────────
@@ -84,6 +86,10 @@ export class RoomManager {
       fastestFingerSettings: gameType === 'fastest-finger' ? {
         timerSeconds: 15,
         totalQuestions: 20,
+      } : undefined,
+      lastWordSettings: gameType === 'last-word' ? {
+        turnDurationSeconds: 15,
+        difficulty: 'mixed',
       } : undefined,
       currentRound: 0,
       currentDrawerId: null,
@@ -215,6 +221,12 @@ export class RoomManager {
       const fastestFingerEngine = this.fastestFingerEngines.get(code);
       if (fastestFingerEngine) {
         fastestFingerEngine.handlePlayerReconnect(oldSocketId, socketId, existingPlayer);
+      }
+
+      // Notify Last Word engine of reconnection
+      const lastWordEngine = this.lastWordEngines.get(code);
+      if (lastWordEngine) {
+        lastWordEngine.handlePlayerReconnect(oldSocketId, socketId, existingPlayer);
       }
 
       return { room, player: existingPlayer };
@@ -363,6 +375,27 @@ export class RoomManager {
       };
       engine = new FastestFingerEngine(room, io, settings);
       this.fastestFingerEngines.set(code, engine);
+    }
+    return engine;
+  }
+
+  // ─── Last Word Standing Integration ───────────────────────────────────────
+
+  getLastWordEngine(code: string): LastWordEngine | undefined {
+    return this.lastWordEngines.get(code);
+  }
+
+  ensureLastWordEngine(code: string, io: GameServer): LastWordEngine {
+    let engine = this.lastWordEngines.get(code);
+    if (!engine) {
+      const room = this.rooms.get(code);
+      if (!room) throw new Error('Room not found');
+      const settings: LastWordSettings = room.lastWordSettings ?? {
+        turnDurationSeconds: 15,
+        difficulty: 'mixed',
+      };
+      engine = new LastWordEngine(room, io, settings);
+      this.lastWordEngines.set(code, engine);
     }
     return engine;
   }
@@ -527,6 +560,7 @@ export class RoomManager {
     room.emojiState = undefined;
     room.drawIdentifyState = undefined;
     room.fastestFingerState = undefined;
+    room.lastWordState = undefined;
 
     // Reset and stop Imposter engine if present
     const imposterEngine = this.imposterEngines.get(code);
@@ -541,6 +575,7 @@ export class RoomManager {
     this.emojiEngines.get(code)?.destroy();
     this.drawIdentifyEngines.get(code)?.stop();
     this.fastestFingerEngines.get(code)?.stop();
+    this.lastWordEngines.get(code)?.stop();
 
     // Cancel all disconnect timers for this room
     for (const [key, timer] of this.disconnectTimeouts.entries()) {
@@ -586,6 +621,8 @@ export class RoomManager {
     this.drawIdentifyEngines.delete(code);
     this.fastestFingerEngines.get(code)?.stop();
     this.fastestFingerEngines.delete(code);
+    this.lastWordEngines.get(code)?.stop();
+    this.lastWordEngines.delete(code);
   }
 
   // ─── Helpers ────────────────────────────────────────────────────────────

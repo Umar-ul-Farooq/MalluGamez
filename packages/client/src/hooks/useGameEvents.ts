@@ -210,6 +210,12 @@ export function useGameEvents() {
       store.setFastestFingerGuessFeedback(res);
     });
 
+    // ── Last Word Standing Events ──
+    socket.on('last-word:state', store.setLastWordState);
+    socket.on('last-word:answer-feedback', (res) => {
+      store.setLastWordFeedback(res);
+    });
+
     // If already connected when this effect runs
     if (socket.connected) onConnect();
 
@@ -241,6 +247,8 @@ export function useGameEvents() {
       socket.off('draw-identify:object-ticked');
       socket.off('fastest-finger:state');
       socket.off('fastest-finger:guess-result');
+      socket.off('last-word:state');
+      socket.off('last-word:answer-feedback');
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

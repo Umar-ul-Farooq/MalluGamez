@@ -11,6 +11,7 @@ import type {
   DrawIdentifyPublicState,
   DrawIdentifyObjectItem,
   FastestFingerPublicState,
+  LastWordPublicState,
 } from '@chitram/shared';
 
 export interface Toast {
@@ -67,6 +68,15 @@ interface GameState {
   fastestFingerState: FastestFingerPublicState | null;
   fastestFingerGuessFeedback: { questionId: string; isCorrect: boolean; message: string; points?: number; seq: number } | null;
 
+  // ─── Last Word Standing In-game ───────────────────────────────────────────
+  lastWordState: LastWordPublicState | null;
+  lastWordFeedback: {
+    questionId: string;
+    status: 'VALID' | 'INVALID' | 'UNCERTAIN' | 'API_ERROR' | 'TARGET_HIT';
+    message: string;
+    seq: number;
+  } | null;
+
   // ─── UI ───────────────────────────────────────────────────────────────────
   toasts: Toast[];
 
@@ -92,6 +102,12 @@ interface GameState {
   setLastTickedObject: (o: { objectIndex: number; identifiedBy: string; identifiedCount: number } | null) => void;
   setFastestFingerState: (s: FastestFingerPublicState) => void;
   setFastestFingerGuessFeedback: (f: { questionId: string; isCorrect: boolean; message: string; points?: number } | null) => void;
+  setLastWordState: (s: LastWordPublicState) => void;
+  setLastWordFeedback: (f: {
+    questionId: string;
+    status: 'VALID' | 'INVALID' | 'UNCERTAIN' | 'API_ERROR' | 'TARGET_HIT';
+    message: string;
+  } | null) => void;
   handleCharadesRoundEnd: (p: {
     result: 'correct' | 'timeout';
     pointsAwardedTo: 'A' | 'B';
@@ -131,6 +147,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   lastTickedObject: null,
   fastestFingerState: null,
   fastestFingerGuessFeedback: null,
+  lastWordState: null,
+  lastWordFeedback: null,
   toasts: [],
 
   setMyId:      (id) => set({ myId: id }),
@@ -178,6 +196,13 @@ export const useGameStore = create<GameState>((set, get) => ({
         ? { ...f, seq: (state.fastestFingerGuessFeedback?.seq ?? 0) + 1 }
         : null,
     })),
+  setLastWordState: (s) => set({ lastWordState: s }),
+  setLastWordFeedback: (f) =>
+    set(state => ({
+      lastWordFeedback: f
+        ? { ...f, seq: (state.lastWordFeedback?.seq ?? 0) + 1 }
+        : null,
+    })),
   handleCharadesRoundEnd: (p) => {
     set({ lastCharadesRoundEnd: p, secretMovie: null });
     const teamName = p.pointsAwardedTo === 'A'
@@ -206,7 +231,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     lastCharadesRoundEnd: null, imposterState: null, imposterSecret: null,
     hasVotedImposter: false, emojiState: null, emojiGuessFeedback: null,
     drawIdentifyState: null, drawIdentifySecretList: [], lastTickedObject: null,
-    fastestFingerState: null, fastestFingerGuessFeedback: null, toasts: [],
+    fastestFingerState: null, fastestFingerGuessFeedback: null,
+    lastWordState: null, lastWordFeedback: null, toasts: [],
   }),
 }));
 

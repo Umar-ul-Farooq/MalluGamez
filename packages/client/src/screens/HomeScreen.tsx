@@ -122,6 +122,22 @@ const GAMES: GameItem[] = [
     status: 'live',
     hostUrl: '/tv?game=fastest-finger',
   },
+  {
+    id: 'last-word',
+    title: 'Last Word Standing',
+    malayalamTitle: 'അവസാന വാക്ക്',
+    subtitle: 'രഹസ്യ വാക്ക് തൊടാതെ ഉത്തരം പറയൂ!',
+    description: 'Take turns naming valid answers without hitting the hidden trap word. Hybrid AI checks creative answers in real time!',
+    emoji: '💣🗣️',
+    mode: 'multiplayer',
+    playerCount: '2–16 Players',
+    badge: 'AI',
+    badgeColor: 'bg-rose-500 text-white font-black',
+    gradient: 'from-rose-950/70 via-amber-950/30 to-rose-950/70',
+    borderColor: 'border-rose-500/50 hover:border-rose-400',
+    status: 'live',
+    hostUrl: '/tv?game=last-word',
+  },
 
   // ─── Single Player Coming Soon Games ───
   {

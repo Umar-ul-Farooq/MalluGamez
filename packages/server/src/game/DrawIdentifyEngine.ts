@@ -14,11 +14,22 @@ export const MIN_DRAWING_SECONDS = 5;
 export const MAX_DRAWING_SECONDS = 60;
 export const DEFAULT_DRAWING_SECONDS = 15;
 
+export const MIN_IDENTIFY_SECONDS = 30;
+export const MAX_IDENTIFY_SECONDS = 180;
+export const DEFAULT_IDENTIFY_SECONDS = 60;
+
 export function clampDrawingDuration(seconds?: number): number {
   if (typeof seconds !== 'number' || !Number.isFinite(seconds)) {
     return DEFAULT_DRAWING_SECONDS;
   }
   return Math.max(MIN_DRAWING_SECONDS, Math.min(MAX_DRAWING_SECONDS, Math.round(seconds)));
+}
+
+export function clampIdentifyDuration(seconds?: number): number {
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds)) {
+    return DEFAULT_IDENTIFY_SECONDS;
+  }
+  return Math.max(MIN_IDENTIFY_SECONDS, Math.min(MAX_IDENTIFY_SECONDS, Math.round(seconds)));
 }
 
 export class DrawIdentifyEngine {
@@ -34,6 +45,7 @@ export class DrawIdentifyEngine {
 
   private drawings: (SubmittedDrawing | null)[] = [];
   private objectList: DrawIdentifyObjectItem[] = [];
+  private usedObjectIds = new Set<string>();
   private roundScore: number = 0;
 
   private timerRemaining: number = 0;
@@ -45,9 +57,9 @@ export class DrawIdentifyEngine {
     this.settings = {
       objectCount: 12,
       language: 'english',
-      identificationDurationSeconds: 60,
       ...initialSettings,
       drawingDurationSeconds: clampDrawingDuration(initialSettings?.drawingDurationSeconds),
+      identificationDurationSeconds: clampIdentifyDuration(initialSettings?.identificationDurationSeconds),
     };
 
     this.room.drawIdentifySettings = this.settings;
@@ -66,10 +78,16 @@ export class DrawIdentifyEngine {
         ? clampDrawingDuration(patch.drawingDurationSeconds)
         : clampDrawingDuration(this.settings.drawingDurationSeconds);
 
+    const nextIdentifyDuration =
+      patch.identificationDurationSeconds !== undefined
+        ? clampIdentifyDuration(patch.identificationDurationSeconds)
+        : clampIdentifyDuration(this.settings.identificationDurationSeconds);
+
     this.settings = {
       ...this.settings,
       ...patch,
       drawingDurationSeconds: nextDrawingDuration,
+      identificationDurationSeconds: nextIdentifyDuration,
     };
     this.room.drawIdentifySettings = this.settings;
     this.broadcastState();
@@ -161,8 +179,8 @@ export class DrawIdentifyEngine {
       p.isDrawing = p.id === this.currentDrawerId;
     }
 
-    // Generate random objects for this round
-    const rawObjects = getRandomObjects(this.settings.objectCount, this.settings.language);
+    // Generate random objects for this round without repeating until pool exhausted
+    const rawObjects = getRandomObjects(this.settings.objectCount, this.settings.language, this.usedObjectIds);
     this.objectList = rawObjects.map(obj => ({
       index: obj.index,
       name: obj.name,
@@ -172,6 +190,8 @@ export class DrawIdentifyEngine {
       identifiedByPlayerId: null,
       identifiedByPlayerName: null,
       identifiedAt: null,
+      incorrectCount: 0,
+      lastIncorrectBy: null,
     }));
 
     // Initialize empty drawings grid
@@ -319,6 +339,43 @@ export class DrawIdentifyEngine {
       this.endRound();
     }
 
+    return true;
+  }
+
+  markIncorrect(playerId: string, payload: { roundId: string; objectIndex: number }): boolean {
+    if (this.roundPhase !== 'identification') {
+      return false;
+    }
+    if (payload.roundId && payload.roundId !== this.roundId) {
+      return false;
+    }
+    if (playerId === this.currentDrawerId) {
+      return false;
+    }
+    if (payload.objectIndex < 0 || payload.objectIndex >= this.objectList.length) {
+      return false;
+    }
+
+    const item = this.objectList[payload.objectIndex];
+    // Finalized Correct objects cannot be marked Incorrect
+    if (item.isIdentified) {
+      return false;
+    }
+
+    const player = this.room.players.find(p => p.id === playerId);
+    item.incorrectCount = (item.incorrectCount ?? 0) + 1;
+    item.lastIncorrectBy = player?.name ?? 'Opposing Player';
+
+    console.log(`[DrawIdentifyEngine:${this.room.code}] Object ${payload.objectIndex} (${item.name}) marked incorrect by ${item.lastIncorrectBy} (x${item.incorrectCount})`);
+
+    this.io.to(this.room.code).emit('draw-identify:object-incorrect', {
+      objectIndex: payload.objectIndex,
+      markedBy: item.lastIncorrectBy,
+      incorrectCount: item.incorrectCount,
+    });
+
+    this.broadcastState();
+    this.sendSecretListToOpposingPlayers();
     return true;
   }
 

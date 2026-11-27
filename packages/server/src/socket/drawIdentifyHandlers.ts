@@ -76,6 +76,21 @@ export function registerDrawIdentifyHandlers(io: GameServer, socket: GameSocket,
     }
   });
 
+  // Opposing player marks an object attempt as incorrect (non-final, allows retries)
+  socket.on('draw-identify:mark-incorrect', ({ roundId, objectIndex }) => {
+    try {
+      const room = rm.getRoomByPlayer(socket.id);
+      if (!room || room.gameType !== 'draw-identify') return;
+
+      const engine = rm.getDrawIdentifyEngine(room.code);
+      if (!engine) return;
+
+      engine.markIncorrect(socket.id, { roundId, objectIndex });
+    } catch (err: any) {
+      socket.emit('room:error', err.message);
+    }
+  });
+
   // Host advances to next round
   socket.on('draw-identify:next-round', () => {
     try {

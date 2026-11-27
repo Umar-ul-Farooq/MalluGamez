@@ -4,6 +4,7 @@ import { Server } from 'socket.io';
 import { io as ioClient, type Socket as ClientSocket } from 'socket.io-client';
 import type { ClientToServerEvents, ServerToClientEvents, DrawIdentifyPublicState, DrawIdentifyObjectItem, RoomPublicState } from '@chitram/shared';
 import { registerSocketHandlers } from './socket/index.js';
+import { DRAW_IDENTIFY_WORDS } from './game/DrawIdentifyBank.js';
 
 type TestClient = ClientSocket<ServerToClientEvents, ClientToServerEvents>;
 
@@ -53,10 +54,17 @@ async function runTests() {
   let p2 = await connectClient(url);
 
   try {
+    // 0. Verify expanded bank has 350+ unique objects
+    assert(DRAW_IDENTIFY_WORDS.length >= 370, `Expected 370+ objects, got ${DRAW_IDENTIFY_WORDS.length}`);
+    const uniqueEng = new Set(DRAW_IDENTIFY_WORDS.map(w => w.english.toLowerCase().trim()));
+    assert(uniqueEng.size === DRAW_IDENTIFY_WORDS.length, 'Bank must have no duplicate English names');
+    console.log(`✓ Verified expanded Draw & Identify bank (${DRAW_IDENTIFY_WORDS.length} unique objects)`);
+
     // 1. Create draw-identify room on TV, join 2 mobile players
     const tvJoined = waitForEvent<RoomPublicState>(tv, 'room:joined');
     tv.emit('room:create', { playerName: 'Host', gameType: 'draw-identify' });
     const room = await tvJoined;
+    assert(room.drawIdentifySettings?.identificationDurationSeconds === 60, 'Default identify timer must be 60s');
 
     const p1J = waitForEvent<RoomPublicState>(p1, 'room:joined');
     p1.emit('room:join', { roomCode: room.code, playerName: 'Alice' });
@@ -66,20 +74,29 @@ async function runTests() {
     p2.emit('room:join', { roomCode: room.code, playerName: 'Bob' });
     await p2J;
 
-    // 2. Start game, capture role state & secret lists for both phones
-    const tvStateP = waitForEvent<DrawIdentifyPublicState>(tv, 'draw-identify:state', s => s.roundPhase === 'drawing');
-    const p1StateP = waitForEvent<DrawIdentifyPublicState>(p1, 'draw-identify:state', s => s.roundPhase === 'drawing');
-    const p2StateP = waitForEvent<DrawIdentifyPublicState>(p2, 'draw-identify:state', s => s.roundPhase === 'drawing');
+    // 2. Configure both drawing timer (10s) and identification timer (90s = 60 + 15 + 15), verify sync & lock on start
+    const tvCfgP = waitForEvent<DrawIdentifyPublicState>(tv, 'draw-identify:state', s => s.identificationDurationSeconds === 90);
+    const p1CfgP = waitForEvent<DrawIdentifyPublicState>(p1, 'draw-identify:state', s => s.identificationDurationSeconds === 90);
+    const p2CfgP = waitForEvent<DrawIdentifyPublicState>(p2, 'draw-identify:state', s => s.identificationDurationSeconds === 90);
+    tv.emit('draw-identify:update-settings', { objectCount: 6, drawingDurationSeconds: 10, identificationDurationSeconds: 90 });
+    await Promise.all([tvCfgP, p1CfgP, p2CfgP]);
+    console.log('✓ Configurable identification timer (90s) synced across TV & mobile');
+
+    const tvStateP = waitForEvent<DrawIdentifyPublicState>(tv, 'draw-identify:state', s => s.roundPhase === 'drawing' && Boolean(s.currentDrawerId));
+    const p1StateP = waitForEvent<DrawIdentifyPublicState>(p1, 'draw-identify:state', s => s.roundPhase === 'drawing' && Boolean(s.currentDrawerId));
+    const p2StateP = waitForEvent<DrawIdentifyPublicState>(p2, 'draw-identify:state', s => s.roundPhase === 'drawing' && Boolean(s.currentDrawerId));
     const p1SecretP = waitForEvent<{ roundId: string; objectList: DrawIdentifyObjectItem[] }>(p1, 'draw-identify:secret-list');
     const p2SecretP = waitForEvent<{ roundId: string; objectList: DrawIdentifyObjectItem[] }>(p2, 'draw-identify:secret-list');
 
-    tv.emit('draw-identify:update-settings', { objectCount: 6, drawingDurationSeconds: 10 });
-    await waitForEvent(tv, 'draw-identify:state');
     tv.emit('draw-identify:start-game');
 
     const [tvState, p1State, p2State, p1Secret, p2Secret] = await Promise.all([
       tvStateP, p1StateP, p2StateP, p1SecretP, p2SecretP,
     ]);
+
+    // Attempt to mutate identificationDurationSeconds after game starts -> must stay 90s
+    tv.emit('draw-identify:update-settings', { identificationDurationSeconds: 30 });
+    assert(tvState.identificationDurationSeconds === 90, 'Identification timer must be 90s');
 
     assert(tvState.currentDrawerId === p1State.currentDrawerId, 'TV and mobile must agree on drawer');
     assert(p1State.currentDrawerId === p2State.currentDrawerId, 'Both mobiles must agree on drawer');
@@ -107,13 +124,29 @@ async function runTests() {
     assert(tvIdState.submittedCount === 6 && tvIdState.drawings.every(d => d !== null), 'All 6 drawings must appear on TV grid');
     console.log('✓ Drawer submitted 6 drawings sequentially and transitioned to identification');
 
-    // 4. Opposing player ticks object #0 -> TV & opposing player receive tick update
+    // 4. Opposing player marks object #0 Incorrect twice (does not disable Correct or award points), then ticks object #0 Correct!
+    const incEvent1 = waitForEvent(oppSock, 'draw-identify:object-incorrect', (d: any) => d.objectIndex === 0 && d.incorrectCount === 1);
+    oppSock.emit('draw-identify:mark-incorrect', { roundId: tvState.roundId, objectIndex: 0 });
+    await incEvent1;
+
+    const incEvent2 = waitForEvent(oppSock, 'draw-identify:object-incorrect', (d: any) => d.objectIndex === 0 && d.incorrectCount === 2);
+    const oppSecretAfterInc = waitForEvent<{ roundId: string; objectList: DrawIdentifyObjectItem[] }>(
+      oppSock,
+      'draw-identify:secret-list',
+      d => d.objectList[0]?.incorrectCount === 2
+    );
+    oppSock.emit('draw-identify:mark-incorrect', { roundId: tvState.roundId, objectIndex: 0 });
+    const [, secAfterInc] = await Promise.all([incEvent2, oppSecretAfterInc]);
+    assert(secAfterInc.objectList[0].isIdentified === false, 'Incorrect must NOT finalize or disable Correct');
+    console.log('✓ Incorrect marked twice without disabling Correct or awarding points');
+
     const tickedTV = waitForEvent<DrawIdentifyPublicState>(tv, 'draw-identify:state', s => s.identifiedCount === 1);
     const tickedEvent = waitForEvent(oppSock, 'draw-identify:object-ticked');
     oppSock.emit('draw-identify:tick-object', { roundId: tvState.roundId, objectIndex: 0 });
     const [afterTickTV] = await Promise.all([tickedTV, tickedEvent]);
-    assert(afterTickTV.objectList[0].isIdentified === true, 'TV grid cell 0 must be marked identified');
-    console.log('✓ Opposing player ticked object #0; TV and clients synced');
+    assert(afterTickTV.objectList[0].isIdentified === true, 'TV grid cell 0 must be marked identified after prior Incorrect');
+    assert(afterTickTV.roundScore === 1, 'Drawer score must be 1');
+    console.log('✓ Object #0 marked Correct after Incorrect; TV and clients synced');
 
     // 5. Refresh opposing player mobile -> reconnects & restores secret list & tick state
     const oppName = drawerIsP1 ? 'Bob' : 'Alice';

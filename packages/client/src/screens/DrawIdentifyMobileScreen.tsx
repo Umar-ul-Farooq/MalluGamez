@@ -19,6 +19,11 @@ export default function DrawIdentifyMobileScreen() {
   const MAX_DRAWING_SECONDS = 60;
   const DEFAULT_DRAWING_SECONDS = 15;
 
+  const MIN_IDENTIFY_SECONDS = 30;
+  const MAX_IDENTIFY_SECONDS = 180;
+  const IDENTIFY_STEP_SECONDS = 15;
+  const DEFAULT_IDENTIFY_SECONDS = 60;
+
   const activeMyId = myId || getSocket().id || '';
   const isDrawer = Boolean(
     room &&
@@ -84,18 +89,27 @@ export default function DrawIdentifyMobileScreen() {
       objectCount: 12,
       language: 'english' as const,
       drawingDurationSeconds: DEFAULT_DRAWING_SECONDS,
-      identificationDurationSeconds: 60,
+      identificationDurationSeconds: DEFAULT_IDENTIFY_SECONDS,
     };
     const drawingSeconds =
       drawIdentifyState?.drawingDurationSeconds ??
       settings.drawingDurationSeconds ??
       DEFAULT_DRAWING_SECONDS;
+    const identifySeconds =
+      drawIdentifyState?.identificationDurationSeconds ??
+      settings.identificationDurationSeconds ??
+      DEFAULT_IDENTIFY_SECONDS;
     const lobbyObjectCount = drawIdentifyState?.objectCount ?? settings.objectCount ?? 12;
     const players = room?.players.filter(p => !p.isHost) ?? [];
 
     const adjustTimer = (delta: number) => {
       const next = Math.max(MIN_DRAWING_SECONDS, Math.min(MAX_DRAWING_SECONDS, drawingSeconds + delta));
       getSocket().emit('draw-identify:update-settings', { drawingDurationSeconds: next });
+    };
+
+    const adjustIdentifyTimer = (delta: number) => {
+      const next = Math.max(MIN_IDENTIFY_SECONDS, Math.min(MAX_IDENTIFY_SECONDS, identifySeconds + delta));
+      getSocket().emit('draw-identify:update-settings', { identificationDurationSeconds: next });
     };
 
     return (
@@ -138,14 +152,40 @@ export default function DrawIdentifyMobileScreen() {
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 pt-3 border-t border-white/10 text-xs text-center">
-              <div className="bg-white/5 rounded-xl p-2">
-                <span className="text-white/40 block text-[10px] uppercase">Objects</span>
-                <span className="text-white font-bold">{lobbyObjectCount}</span>
+            <div className="pt-3 border-t border-white/10 space-y-2">
+              <div className="text-center">
+                <p className="text-xs uppercase tracking-widest font-bold text-white/60">Identification Timer</p>
+                <p className="text-[11px] text-white/40">30s – 180s (15s increments)</p>
               </div>
+              <div className="flex items-center justify-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => adjustIdentifyTimer(-IDENTIFY_STEP_SECONDS)}
+                  disabled={identifySeconds <= MIN_IDENTIFY_SECONDS}
+                  aria-label="Decrease identification timer"
+                  className="w-11 h-11 rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed text-white font-black text-2xl flex items-center justify-center transition-all"
+                >
+                  −
+                </button>
+                <span className="min-w-[5rem] text-center text-3xl font-mono font-black text-teal-300 tabular-nums">
+                  {identifySeconds}s
+                </span>
+                <button
+                  type="button"
+                  onClick={() => adjustIdentifyTimer(IDENTIFY_STEP_SECONDS)}
+                  disabled={identifySeconds >= MAX_IDENTIFY_SECONDS}
+                  aria-label="Increase identification timer"
+                  className="w-11 h-11 rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed text-white font-black text-2xl flex items-center justify-center transition-all"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-white/10 text-xs text-center">
               <div className="bg-white/5 rounded-xl p-2">
-                <span className="text-white/40 block text-[10px] uppercase">Identify Time</span>
-                <span className="text-teal-300 font-bold">60s</span>
+                <span className="text-white/40 block text-[10px] uppercase">Objects per Round</span>
+                <span className="text-white font-bold">{lobbyObjectCount}</span>
               </div>
             </div>
           </div>
@@ -316,6 +356,14 @@ export default function DrawIdentifyMobileScreen() {
   function handleTickObject(objectIndex: number) {
     if (!isOpposingPlayer || roundPhase !== 'identification') return;
     getSocket().emit('draw-identify:tick-object', {
+      roundId,
+      objectIndex,
+    });
+  }
+
+  function handleMarkIncorrect(objectIndex: number) {
+    if (!isOpposingPlayer || roundPhase !== 'identification') return;
+    getSocket().emit('draw-identify:mark-incorrect', {
       roundId,
       objectIndex,
     });
@@ -527,6 +575,8 @@ export default function DrawIdentifyMobileScreen() {
         ) : (
           drawIdentifySecretList.map(item => {
             const isTicked = item.isIdentified;
+            const incorrectCount = item.incorrectCount ?? 0;
+            const hasIncorrect = !isTicked && incorrectCount > 0;
 
             return (
               <div
@@ -534,12 +584,18 @@ export default function DrawIdentifyMobileScreen() {
                 className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
                   isTicked
                     ? 'bg-emerald-950/30 border-emerald-500/50 text-emerald-300 shadow-sm'
+                    : hasIncorrect
+                    ? 'bg-rose-950/25 border-rose-500/40 text-white'
                     : 'bg-white/5 border-white/10 text-white'
                 }`}
               >
                 <div className="flex items-center gap-3 truncate">
                   <span className={`w-7 h-7 rounded-xl flex items-center justify-center font-black text-xs shrink-0 ${
-                    isTicked ? 'bg-emerald-500 text-white' : 'bg-white/10 text-white/60'
+                    isTicked
+                      ? 'bg-emerald-500 text-white'
+                      : hasIncorrect
+                      ? 'bg-rose-500/80 text-white'
+                      : 'bg-white/10 text-white/60'
                   }`}>
                     #{item.index + 1}
                   </span>
@@ -552,23 +608,39 @@ export default function DrawIdentifyMobileScreen() {
                         ✓ Ticked by {item.identifiedByPlayerName}
                       </p>
                     )}
+                    {hasIncorrect && (
+                      <p className="text-[10px] text-rose-300 font-semibold">
+                        ✗ Incorrect{incorrectCount > 1 ? ` (×${incorrectCount})` : ''}{item.lastIncorrectBy ? ` • ${item.lastIncorrectBy}` : ''} — still open
+                      </p>
+                    )}
                   </div>
                 </div>
 
-                {/* Interactive Tick Button (active in Identification Phase) */}
+                {/* Interactive Correct & Incorrect Buttons (active in Identification Phase) */}
                 {roundPhase === 'identification' && (
-                  <button
-                    type="button"
-                    onClick={() => handleTickObject(item.index)}
-                    disabled={isTicked}
-                    className={`px-3 py-2 rounded-xl font-bold text-xs shrink-0 transition-all ${
-                      isTicked
-                        ? 'bg-emerald-600/30 text-emerald-400 border border-emerald-500/40 cursor-default'
-                        : 'bg-emerald-600 hover:bg-emerald-500 text-white active:scale-95 shadow-md shadow-emerald-950/50'
-                    }`}
-                  >
-                    {isTicked ? '✓ Found' : '✓ Tick'}
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {!isTicked && (
+                      <button
+                        type="button"
+                        onClick={() => handleMarkIncorrect(item.index)}
+                        className="px-2.5 py-2 rounded-xl font-bold text-xs bg-rose-600/80 hover:bg-rose-500 text-white active:scale-95 transition-all"
+                      >
+                        ✗ Incorrect
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleTickObject(item.index)}
+                      disabled={isTicked}
+                      className={`px-3 py-2 rounded-xl font-bold text-xs transition-all ${
+                        isTicked
+                          ? 'bg-emerald-600/30 text-emerald-400 border border-emerald-500/40 cursor-default'
+                          : 'bg-emerald-600 hover:bg-emerald-500 text-white active:scale-95 shadow-md shadow-emerald-950/50'
+                      }`}
+                    >
+                      {isTicked ? '✓ Found' : '✓ Tick'}
+                    </button>
+                  </div>
                 )}
 
                 {roundPhase === 'drawing' && (

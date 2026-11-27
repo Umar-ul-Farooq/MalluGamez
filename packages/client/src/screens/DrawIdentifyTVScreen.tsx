@@ -9,6 +9,11 @@ const MIN_DRAWING_SECONDS = 5;
 const MAX_DRAWING_SECONDS = 60;
 const DEFAULT_DRAWING_SECONDS = 15;
 
+const MIN_IDENTIFY_SECONDS = 30;
+const MAX_IDENTIFY_SECONDS = 180;
+const IDENTIFY_STEP_SECONDS = 15;
+const DEFAULT_IDENTIFY_SECONDS = 60;
+
 interface Props {
   hostIP: string;
 }
@@ -29,9 +34,10 @@ export default function DrawIdentifyTVScreen({ hostIP }: Props) {
     objectCount: 12,
     language: 'english',
     drawingDurationSeconds: DEFAULT_DRAWING_SECONDS,
-    identificationDurationSeconds: 60,
+    identificationDurationSeconds: DEFAULT_IDENTIFY_SECONDS,
   };
   const drawingSeconds = settings.drawingDurationSeconds ?? DEFAULT_DRAWING_SECONDS;
+  const identifySeconds = settings.identificationDurationSeconds ?? DEFAULT_IDENTIFY_SECONDS;
 
   function updateSettings(patch: Partial<DrawIdentifySettings>) {
     getSocket().emit('draw-identify:update-settings', patch);
@@ -344,9 +350,52 @@ export default function DrawIdentifyTVScreen({ hostIP }: Props) {
                     </button>
                   </div>
                 </div>
-                <div className="flex justify-between items-center pt-2 border-t border-white/10 text-xs">
-                  <span className="text-white/60">Identification Timer:</span>
-                  <span className="text-teal-300 font-mono font-bold text-sm">60s</span>
+                <div className="flex justify-between items-center pt-3 border-t border-white/10">
+                  <div>
+                    <span className="text-white/80 font-bold text-xs uppercase tracking-wider block">
+                      Identification Timer
+                    </span>
+                    <span className="text-white/40 text-[11px]">
+                      {MIN_IDENTIFY_SECONDS}s – {MAX_IDENTIFY_SECONDS}s (15s steps)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateSettings({
+                          identificationDurationSeconds: Math.max(
+                            MIN_IDENTIFY_SECONDS,
+                            identifySeconds - IDENTIFY_STEP_SECONDS
+                          ),
+                        })
+                      }
+                      disabled={identifySeconds <= MIN_IDENTIFY_SECONDS}
+                      aria-label="Decrease identification timer"
+                      className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed text-white font-black text-lg flex items-center justify-center transition-all"
+                    >
+                      −
+                    </button>
+                    <span className="min-w-[3.5rem] text-center text-teal-300 font-mono font-black text-xl tabular-nums">
+                      {identifySeconds}s
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateSettings({
+                          identificationDurationSeconds: Math.min(
+                            MAX_IDENTIFY_SECONDS,
+                            identifySeconds + IDENTIFY_STEP_SECONDS
+                          ),
+                        })
+                      }
+                      disabled={identifySeconds >= MAX_IDENTIFY_SECONDS}
+                      aria-label="Increase identification timer"
+                      className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed text-white font-black text-lg flex items-center justify-center transition-all"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -485,6 +534,16 @@ export default function DrawIdentifyTVScreen({ hostIP }: Props) {
                     : 'border-2 border-gray-200'
                 }`}
               >
+                <span
+                  className={`absolute top-2 left-2 z-20 min-w-[1.75rem] h-7 px-1.5 rounded-lg font-black text-sm flex items-center justify-center shadow-sm ${
+                    isIdentified
+                      ? 'bg-green-600 text-white'
+                      : 'bg-gray-900/80 text-white'
+                  }`}
+                >
+                  {idx + 1}
+                </span>
+
                 {isIdentified && (
                   <div
                     className="absolute top-2 right-2 z-20 w-8 h-8 rounded-full bg-green-500 text-white font-black text-lg flex items-center justify-center shadow-md"

@@ -281,6 +281,8 @@ export interface DrawIdentifyObjectItem {
   identifiedByPlayerId?: string | null;
   identifiedByPlayerName?: string | null;
   identifiedAt?: number | null;
+  incorrectCount?: number;
+  lastIncorrectBy?: string | null;
 }
 
 export interface DrawIdentifyPublicState {
@@ -405,6 +407,7 @@ export interface ClientToServerEvents {
   'draw-identify:start-game': () => void; // host only
   'draw-identify:submit-drawing': (payload: { roundId: string; drawingIndex: number; dataUrl: string }) => void; // drawer only
   'draw-identify:tick-object': (payload: { roundId: string; objectIndex: number }) => void; // opposing players only
+  'draw-identify:mark-incorrect': (payload: { roundId: string; objectIndex: number }) => void; // opposing players only
   'draw-identify:next-round': () => void; // host only
   'draw-identify:finish-game': () => void; // host only
   'draw-identify:restart-game': () => void; // host only
@@ -466,6 +469,7 @@ export interface ServerToClientEvents {
   'draw-identify:state': (state: DrawIdentifyPublicState) => void;
   'draw-identify:secret-list': (payload: { roundId: string; objectList: DrawIdentifyObjectItem[] }) => void; // Opposing players only!
   'draw-identify:object-ticked': (payload: { objectIndex: number; identifiedBy: string; identifiedCount: number }) => void;
+  'draw-identify:object-incorrect': (payload: { objectIndex: number; markedBy: string; incorrectCount: number }) => void;
   'draw-identify:drawing-added': (drawing: SubmittedDrawing) => void;
 
   // Fastest Finger – Picture Rush

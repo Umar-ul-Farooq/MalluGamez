@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
 import type { LastWordQuestion } from './LastWordBank';
 
 export type ValidationOutcomeStatus =
@@ -28,7 +28,7 @@ export type AiEvaluatorFn = (params: {
 }) => Promise<GeminiJsonAssessment>;
 
 const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash';
-const API_TIMEOUT_MS = 8000;
+const API_TIMEOUT_MS = 15000;
 const MAX_CACHE_ENTRIES = 2000;
 
 /**
@@ -369,13 +369,17 @@ export class LastWordValidationService {
           `Submitted Answer: ${submittedAnswer}`,
         ].join('\n');
 
+        const modelName = this.getModelName();
         const response = await this.withTimeout(
           client.models.generateContent({
-            model: this.getModelName(),
+            model: modelName,
             contents: userContent,
             config: {
               systemInstruction,
               temperature: 0.1,
+              ...(modelName.startsWith('gemini-3')
+                ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
+                : {}),
               responseMimeType: 'application/json',
               responseSchema: {
                 type: Type.OBJECT,

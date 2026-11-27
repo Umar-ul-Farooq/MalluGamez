@@ -7,6 +7,7 @@ export class GameEngine {
   private roundEndTimer: NodeJS.Timeout | null = null;
   private drawerIndex = 0;
   private currentWordItem: WordItem | null = null;
+  private usedWordKeys = new Set<string>();
 
   constructor(
     private room: Room,
@@ -34,8 +35,14 @@ export class GameEngine {
     this.drawerIndex++;
     this.room.currentDrawerId = drawer.id;
 
-    // Pick a random word
-    const word = this.wordBank[Math.floor(Math.random() * this.wordBank.length)];
+    // Pick a random unused word so rounds never repeat within a game
+    let available = this.wordBank.filter((w) => !this.usedWordKeys.has(w.malayalam));
+    if (available.length === 0) {
+      this.usedWordKeys.clear();
+      available = this.wordBank;
+    }
+    const word = available[Math.floor(Math.random() * available.length)];
+    this.usedWordKeys.add(word.malayalam);
     this.currentWordItem = word;
     this.room.currentWord = word.malayalam;
     this.room.currentCategory = word.category;
